@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint for User
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) && data.keys().size() == 3
+        && data.uid is string && data.uid.size() <= 128
+        && data.email is string && data.email.size() <= 256
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['userId', 'concept', 'dueDate', 'expectedAmount', 'status', 'createdAt'])
+        && data.userId is string && data.userId.size() <= 128
+        && data.concept is string && data.concept.size() <= 256
+        && data.get('conceptId', null) == null || data.get('conceptId', null) is string
+        && data.get('description', '') is string
+        && data.dueDate is timestamp
+        && (data.get('originalPeriodMonth', null) == null || data.get('originalPeriodMonth', null) is number)
+        && (data.get('originalPeriodYear', null) == null || data.get('originalPeriodYear', null) is number)
+        && data.expectedAmount is number
+        && (data.get('actualAmount', null) == null || data.get('actualAmount', null) is number)
+        && (data.get('actualDate', null) == null || data.get('actualDate', null) is timestamp)
+        && (data.get('isDelayed', null) == null || data.get('isDelayed', null) is bool)
+        && data.status in ['PENDING', 'PAID', 'NO_NOTICE', 'REFUNDED', 'OVERDUE', 'APPROX_OVERDUE', 'PENDING_DATE', 'CANCELED']
+        && data.createdAt is timestamp
+        && (data.get('updatedAt', null) == null || data.get('updatedAt', null) is timestamp);
+    }
+
+    function isValidConcept(data) {
+      return data.keys().hasAll(['userId', 'name', 'category', 'expectedAmount', 'periodicity', 'dateType', 'active', 'createdAt', 'firstPeriod'])
+        && data.userId is string && data.userId.size() <= 128
+        && data.name is string && data.name.size() <= 256
+        && data.category is string && data.category.size() <= 128
+        && data.get('description', '') is string
+        && data.expectedAmount is number
+        && data.get('color', '') is string
+        && data.periodicity is string
+        && (data.get('customMonths', []) is list)
+        && data.dateType is string
+        && (data.get('day', null) == null || data.get('day', null) is number)
+        && data.firstPeriod is timestamp
+        && data.active is bool
+        && (data.get('exceptionNoticeDays', null) == null || data.get('exceptionNoticeDays', null) is number)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['notificationsEnabled', 'generalNoticeDays'])
+        && (data.get('updatedAt', null) == null || data.get('updatedAt', null) is timestamp)
+        && (data.get('createdAt', null) == null || data.get('createdAt', null) is timestamp)
+        && data.notificationsEnabled is bool
+        && data.generalNoticeDays is number;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      
+      // Create
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time
+        && isValidUser(incoming());
+
+      // Update
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && isValidUser(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email']); // Can only update email
+        
+      allow delete: if false; // Users cannot be deleted from client
+    }
+
+    match /settings/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      
+      // Create
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && isValidSettings(incoming());
+
+      // Update
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && isValidSettings(incoming());
+        
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /price_versions/{versionId} {
+      allow read, write: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+    }
+
+    match /concepts/{conceptId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && isValidConcept(incoming());
+      allow update: if isSignedIn()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && isValidConcept(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && isValidPayment(incoming());
+      allow update: if isSignedIn()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && isValidPayment(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}

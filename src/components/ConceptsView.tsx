@@ -1,0 +1,273 @@
+import React, { useState, useMemo } from 'react';
+import { Concept } from '../types';
+import { doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+
+interface ConceptsViewProps {
+  concepts: Concept[];
+  onNew: () => void;
+  onSelect: (concept: Concept) => void;
+}
+
+export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
+  const [sortBy, setSortBy] = useState<'name' | 'next_due' | 'amount'>('name');
+
+  const filteredConcepts = useMemo(() => {
+    let result = concepts;
+
+    if (searchTerm) {
+      result = result.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+    if (filterCategory) {
+      result = result.filter(c => c.category === filterCategory);
+    }
+    if (filterStatus === 'active') {
+      result = result.filter(c => c.active);
+    } else if (filterStatus === 'inactive') {
+      result = result.filter(c => !c.active);
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'amount') {
+        return b.expectedAmount - a.expectedAmount; // desc
+      }
+      if (sortBy === 'next_due') {
+        // We'll simplify this since we don't have next due date directly on Concept, 
+        // we'd need to calculate it. For now sort by createdAt as fallback.
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      }
+      return 0;
+    });
+
+    return result;
+  }, [concepts, searchTerm, filterCategory, filterStatus, sortBy]);
+
+  const handleToggleStatus = async (concept: Concept) => {
+    try {
+      if (concept.active) {
+        if (!confirm("¿Deseas desactivar este concepto? No se generarán nuevos vencimientos, pero se mantendrá el historial.")) {
+          return;
+        }
+      }
+      await updateDoc(doc(db, 'concepts', concept.id), {
+        active: !concept.active,
+        updatedAt: new Date()
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDelete = async (concept: Concept) => {
+    if (!confirm(`¿Eliminar definitivamente el concepto "${concept.name}"? Solo usar si fue creado por error.`)) {
+      return;
+    }
+    try {
+      // Find payments with this concept ID
+      const q = query(collection(db, 'payments'), where('conceptId', '==', concept.id));
+      const snap = await getDocs(q);
+      
+      if (!snap.empty) {
+        alert("No se puede eliminar un concepto que ya tiene pagos registrados (historial real). Por favor, desactívalo en su lugar.");
+        return;
+      }
+
+      await deleteDoc(doc(db, 'concepts', concept.id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-bold text-slate-800">Conceptos</h2>
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input 
+            type="text"
+            placeholder="Buscar concepto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <select 
+            value={filterCategory} 
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+          >
+            <option value="">Todas las categorías</option>
+            <option value="Suscripción">Suscripción</option>
+            <option value="Impuesto">Impuesto</option>
+            <option value="Tasa">Tasa</option>
+            <option value="Seguro">Seguro</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <select 
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+          >
+            <option value="">Todos los estados</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        {filteredConcepts.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 flex flex-col items-center">
+            <span className="material-symbols-outlined text-4xl mb-3 text-slate-300">search_off</span>
+            <p>No se encontraron conceptos.</p>
+            {(searchTerm || filterCategory || filterStatus) ? (
+              <button onClick={() => { setSearchTerm(''); setFilterCategory(''); setFilterStatus(''); }} className="mt-4 text-indigo-600 hover:underline text-sm">
+                Restablecer filtros
+              </button>
+            ) : (
+              <button onClick={onNew} className="mt-4 text-indigo-600 hover:underline text-sm font-medium">
+                Crear tu primer concepto
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50">
+                    <th className="px-6 py-3">Concepto</th>
+                    <th className="px-6 py-3">Periodicidad</th>
+                    <th className="px-6 py-3">Importe</th>
+                    <th className="px-6 py-3">Estado</th>
+                    <th className="px-6 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredConcepts.map(concept => (
+                    <tr key={concept.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => onSelect(concept)}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {concept.color && (
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: concept.color }} />
+                          )}
+                          <div>
+                            <div className="font-medium text-slate-900">{concept.name}</div>
+                            <div className="text-xs text-slate-500">{concept.category}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 capitalize">
+                        {concept.periodicity === 'monthly' && 'Mensual'}
+                        {concept.periodicity === 'quarterly' && 'Trimestral'}
+                        {concept.periodicity === 'semiannual' && 'Semestral'}
+                        {concept.periodicity === 'annual' && 'Anual'}
+                        {concept.periodicity === 'one_time' && 'Pago Único'}
+                        {concept.periodicity === 'custom_months' && 'Meses Específicos'}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium">
+                        {(concept.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-tight ${concept.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {concept.active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onSelect(concept); }}
+                          className="text-slate-400 hover:text-blue-600 transition-colors mr-3"
+                          title="Editar"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">edit</span>
+                        </button>
+                        <button 
+                          onClick={() => handleToggleStatus(concept)}
+                          className="text-slate-400 hover:text-indigo-600 transition-colors mr-3"
+                          title={concept.active ? 'Desactivar' : 'Activar'}
+                        >
+                          <span className="material-symbols-outlined text-[20px]">{concept.active ? 'block' : 'check_circle'}</span>
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(concept)}
+                          className="text-slate-400 hover:text-red-600 transition-colors"
+                          title="Eliminar definitivamente"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="md:hidden flex flex-col divide-y divide-slate-100">
+              {filteredConcepts.map(concept => (
+                <div key={concept.id} className="p-4 hover:bg-slate-50 cursor-pointer" onClick={() => onSelect(concept)}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      {concept.color && (
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: concept.color }} />
+                      )}
+                      <div>
+                        <h3 className="font-medium text-slate-900">{concept.name}</h3>
+                        <p className="text-xs text-slate-500">{concept.category}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium text-sm">{(concept.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                      <span className={`px-2 py-0.5 mt-1 inline-block rounded-full text-[10px] font-bold uppercase tracking-tight ${concept.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {concept.active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-4">
+                    <div className="text-xs text-slate-600 capitalize bg-slate-100 px-2 py-1 rounded">
+                      {concept.periodicity === 'monthly' && 'Mensual'}
+                      {concept.periodicity === 'quarterly' && 'Trimestral'}
+                      {concept.periodicity === 'semiannual' && 'Semestral'}
+                      {concept.periodicity === 'annual' && 'Anual'}
+                      {concept.periodicity === 'one_time' && 'Pago Único'}
+                      {concept.periodicity === 'custom_months' && 'Meses Específicos'}
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onSelect(concept); }}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Editar"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button 
+                        onClick={() => handleToggleStatus(concept)}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                        title={concept.active ? 'Desactivar' : 'Activar'}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">{concept.active ? 'block' : 'check_circle'}</span>
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(concept)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Eliminar definitivamente"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,399 @@
+import React, { useMemo, useState } from 'react';
+import { Payment, Concept } from '../types';
+import { 
+  calculateTotalPrevisto, 
+  calculateTotalPagadoReal, 
+  calculateDiferenciaConfirmada, 
+  calculatePendientes, 
+  filterPaymentsByYear,
+  PENDING_STATUSES
+} from '../utils/paymentUtils';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AnnualBreakdowns } from './AnnualBreakdowns';
+
+interface AnnualViewProps {
+  payments: Payment[];
+  concepts: Concept[];
+  globalYear: number;
+  setGlobalYear: React.Dispatch<React.SetStateAction<number>>;
+  onOpenPayment: (payment: Payment) => void;
+}
+
+export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOpenPayment }: AnnualViewProps) {
+  const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
+
+  // Search & Sort states for matrix
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'previsto' | 'real'>('name');
+  const [sortDesc, setSortDesc] = useState(false);
+
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+  const thisYearPayments = filterPaymentsByYear(payments, globalYear);
+  
+  const totalPrevisto = calculateTotalPrevisto(thisYearPayments);
+  const totalRealPagado = calculateTotalPagadoReal(thisYearPayments);
+  const diferenciaConfirmada = calculateDiferenciaConfirmada(thisYearPayments);
+  const { total: totalPendiente, count: countPendientes } = calculatePendientes(thisYearPayments);
+  
+  const countPagados = thisYearPayments.filter(p => p.status === 'PAID').length;
+  const countCancelados = thisYearPayments.filter(p => p.status === 'CANCELED').length;
+
+  const chartData = useMemo(() => {
+    return monthNamesShort.map((monthName, index) => {
+      const monthPayments = thisYearPayments.filter(p => p.originalPeriodMonth === index);
+      return {
+        name: monthName,
+        Previsto: calculateTotalPrevisto(monthPayments),
+        Real: calculateTotalPagadoReal(monthPayments),
+        monthIndex: index
+      };
+    });
+  }, [thisYearPayments]);
+
+  const matrixData = useMemo(() => {
+    const conceptsInYear = concepts.filter(c => thisYearPayments.some(p => p.conceptId === c.id));
+
+    const rows = conceptsInYear.map(c => {
+      const conceptPayments = thisYearPayments.filter(p => p.conceptId === c.id);
+      
+      const row: any = {
+        concept: c,
+        totalPrevisto: calculateTotalPrevisto(conceptPayments),
+        totalReal: calculateTotalPagadoReal(conceptPayments),
+        months: {}
+      };
+
+      for (let i = 0; i < 12; i++) {
+        const p = conceptPayments.filter(p => p.originalPeriodMonth === i);
+        row.months[i] = {
+          previsto: calculateTotalPrevisto(p),
+          real: calculateTotalPagadoReal(p),
+          payments: p
+        };
+      }
+      return row;
+    });
+
+    // Filter
+    let filteredRows = rows;
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      filteredRows = rows.filter(r => r.concept.name.toLowerCase().includes(q));
+    }
+    
+    // Sort
+    filteredRows.sort((a, b) => {
+      let diff = 0;
+      if (sortBy === 'name') diff = a.concept.name.localeCompare(b.concept.name);
+      else if (sortBy === 'previsto') diff = a.totalPrevisto - b.totalPrevisto;
+      else if (sortBy === 'real') diff = a.totalReal - b.totalReal;
+      
+      return sortDesc ? -diff : diff;
+    });
+
+    return filteredRows;
+  }, [thisYearPayments, concepts, searchQuery, sortBy, sortDesc]);
+
+  const filteredTotals = useMemo(() => {
+    let globalPrev = 0;
+    let globalReal = 0;
+    const monthlyPrev = Array(12).fill(0);
+    const monthlyReal = Array(12).fill(0);
+
+    matrixData.forEach(row => {
+      globalPrev += row.totalPrevisto;
+      globalReal += row.totalReal;
+      for (let i = 0; i < 12; i++) {
+        monthlyPrev[i] += row.months[i].previsto;
+        monthlyReal[i] += row.months[i].real;
+      }
+    });
+
+    return { globalPrev, globalReal, monthlyPrev, monthlyReal };
+  }, [matrixData]);
+
+  const handlePrevYear = () => setGlobalYear(globalYear - 1);
+  const handleNextYear = () => setGlobalYear(globalYear + 1);
+
+  return (
+    <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto max-w-7xl mx-auto w-full">
+      
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-2">
+        <h2 className="text-2xl font-bold text-slate-800">Resumen Anual</h2>
+        
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+          <button onClick={handlePrevYear} aria-label="Año anterior" className="p-1.5 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <span className="material-symbols-outlined text-lg">chevron_left</span>
+          </button>
+          <span className="text-lg font-bold text-slate-800 min-w-[4rem] text-center">{globalYear}</span>
+          <button onClick={handleNextYear} aria-label="Año siguiente" className="p-1.5 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <span className="material-symbols-outlined text-lg">chevron_right</span>
+          </button>
+        </div>
+      </div>
+      
+      {thisYearPayments.length === 0 ? (
+        <div className="bg-white p-12 text-center rounded-xl border border-slate-200 shadow-sm">
+          <span className="material-symbols-outlined text-5xl mb-4 text-slate-300">event_busy</span>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">No hay datos para {globalYear}</h3>
+          <p className="text-slate-500 font-medium">No existen vencimientos registrados en este periodo.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Previsto</span>
+              <span className="text-xl md:text-2xl font-bold text-slate-900">{totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Real Pagado</span>
+              <span className="text-xl md:text-2xl font-bold text-green-700">{totalRealPagado.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Diferencia Confirmada</span>
+                <span className={`text-xl md:text-2xl font-bold ${diferenciaConfirmada > 0 ? 'text-red-600' : diferenciaConfirmada < 0 ? 'text-green-600' : 'text-slate-700'}`}>
+                  {diferenciaConfirmada > 0 ? '+' : ''}{diferenciaConfirmada.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-medium mt-1">
+                {diferenciaConfirmada > 0 ? 'Sobrecoste' : diferenciaConfirmada < 0 ? 'Ahorro / Abono' : 'Coincide con previsto'}
+              </span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Pdte. Económico</span>
+                <span className="text-xl md:text-2xl font-bold text-orange-600">{totalPendiente.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-medium mt-1">
+                {countPendientes} recibos pendientes
+              </span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center flex flex-col justify-center">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase">Pagados</span>
+                <span className="block text-xl font-bold text-green-700">{countPagados}</span>
+             </div>
+             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center flex flex-col justify-center">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase">Pendientes</span>
+                <span className="block text-xl font-bold text-orange-600">{countPendientes}</span>
+             </div>
+             <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-center flex flex-col justify-center">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase">Cancelados</span>
+                <span className="block text-xl font-bold text-slate-600">{countCancelados}</span>
+             </div>
+          </div>
+
+          <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="text-base md:text-lg font-bold text-slate-800 mb-6">Evolución Mensual</h3>
+            <div className="h-64 md:h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#64748b', fontSize: 12 }}
+                    tickFormatter={(value) => `${value} €`}
+                    width={50}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: '#f8fafc' }}
+                    formatter={(value: number) => value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <ReferenceLine y={0} stroke="#cbd5e1" />
+                  <Bar dataKey="Previsto" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Real" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          
+          {/* Matriz Anual Desktop */}
+          <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-800">
+                Desglose por Concepto (Matriz Anual)
+                {searchQuery.trim() !== '' && <span className="ml-2 text-xs font-normal text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Filtrado</span>}
+              </h3>
+              
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+                  <input 
+                    type="text" 
+                    placeholder="Buscar concepto..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-48"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                  )}
+                </div>
+                <select 
+                  value={`${sortBy}-${sortDesc ? 'desc' : 'asc'}`}
+                  onChange={(e) => {
+                    const [s, d] = e.target.value.split('-');
+                    setSortBy(s as any);
+                    setSortDesc(d === 'desc');
+                  }}
+                  className="py-1.5 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700 bg-white"
+                >
+                  <option value="name-asc">Nombre (A-Z)</option>
+                  <option value="name-desc">Nombre (Z-A)</option>
+                  <option value="previsto-desc">Previsto (Mayor)</option>
+                  <option value="previsto-asc">Previsto (Menor)</option>
+                  <option value="real-desc">Real (Mayor)</option>
+                  <option value="real-asc">Real (Menor)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 w-48 shadow-[1px_0_0_0_#e2e8f0]">Concepto</th>
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right w-24">Total Año</th>
+                    {monthNamesShort.map(m => (
+                      <th key={m} className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right min-w-[70px]">{m}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {matrixData.map((row) => (
+                    <tr key={row.concept.id} className="hover:bg-slate-50 transition-colors group">
+                      <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white group-hover:bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate max-w-[200px]" title={row.concept.name}>
+                        {row.concept.name}
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="text-sm font-bold text-slate-900">{row.totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                        {row.totalReal !== row.totalPrevisto && (
+                          <div className="text-[10px] text-slate-500 line-through">{row.totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                        )}
+                      </td>
+                      {Array.from({ length: 12 }).map((_, i) => {
+                        const cell = row.months[i];
+                        if (cell.payments.length === 0) return <td key={i} className="p-3 text-center text-slate-300">-</td>;
+                        
+                        const hasPending = cell.payments.some((p: Payment) => p.status !== 'PAID' && p.status !== 'CANCELED');
+                        
+                        return (
+                          <td key={i} className="p-3 text-right cursor-pointer hover:bg-indigo-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
+                            <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-slate-900'}`}>
+                              {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
+                            </div>
+                            {cell.real > 0 && cell.real !== cell.previsto && (
+                              <div className="text-[10px] text-slate-500 line-through">
+                                {cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                              </div>
+                            )}
+                            {cell.payments.length > 1 && (
+                              <div className="text-[10px] text-indigo-600 font-medium">+{cell.payments.length - 1} más</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {/* Fila de totales mensuales en la tabla */}
+                  <tr className="bg-slate-100 border-t-2 border-slate-200">
+                    <td className="p-3 text-sm font-bold text-slate-800 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0]">
+                      {searchQuery ? 'Totales Filtrados (P)' : 'Totales Mes (Previsto)'}
+                    </td>
+                    <td className="p-3 text-right text-sm font-bold text-slate-800">{filteredTotals.globalPrev.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    {filteredTotals.monthlyPrev.map((v, i) => (
+                      <td key={i} className="p-3 text-right text-xs font-bold text-slate-600">{v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    ))}
+                  </tr>
+                  <tr className="bg-slate-100 border-t border-slate-200">
+                    <td className="p-3 text-sm font-bold text-slate-800 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0]">
+                      {searchQuery ? 'Totales Filtrados (R)' : 'Totales Mes (Real)'}
+                    </td>
+                    <td className="p-3 text-right text-sm font-bold text-green-700">{filteredTotals.globalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    {filteredTotals.monthlyReal.map((v, i) => (
+                      <td key={i} className="p-3 text-right text-xs font-bold text-green-700">{v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Acordeón Mensual Mobile */}
+          <div className="md:hidden space-y-3">
+            <h3 className="text-base font-bold text-slate-800 mb-2">Desglose por Meses</h3>
+            {monthNames.map((monthName, index) => {
+              const monthPayments = thisYearPayments.filter(p => p.originalPeriodMonth === index);
+              if (monthPayments.length === 0) return null;
+              
+              const isExpanded = expandedMonth === index;
+              const mPrevisto = calculateTotalPrevisto(monthPayments);
+              const mReal = calculateTotalPagadoReal(monthPayments);
+              const mPendientes = monthPayments.filter(p => PENDING_STATUSES.includes(p.status)).length;
+
+              return (
+                <div key={index} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <button 
+                    onClick={() => setExpandedMonth(isExpanded ? null : index)}
+                    className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                  >
+                    <div>
+                      <span className="block text-sm font-bold text-slate-800">{monthName}</span>
+                      <span className="block text-xs text-slate-500">{monthPayments.length} recibos • {mPendientes} pdtes.</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="block text-xs font-bold text-slate-900">{mPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} (P)</span>
+                        <span className="block text-xs font-bold text-green-700">{mReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} (R)</span>
+                      </div>
+                      <span className={`material-symbols-outlined text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                    </div>
+                  </button>
+                  
+                  {isExpanded && (
+                    <div className="divide-y divide-slate-100 border-t border-slate-200">
+                      {monthPayments.map(p => {
+                        const concept = concepts.find(c => c.id === p.conceptId);
+                        const isPending = PENDING_STATUSES.includes(p.status);
+                        return (
+                          <div 
+                            key={p.id} 
+                            onClick={() => onOpenPayment(p)}
+                            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 active:bg-slate-100"
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm font-semibold text-slate-800">{concept?.name || p.concept}</span>
+                              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{p.status}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className={`block text-sm font-bold ${isPending ? 'text-orange-600' : 'text-slate-900'}`}>
+                                {isPending ? (p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : ((p.actualAmount ?? p.expectedAmount) / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <AnnualBreakdowns payments={thisYearPayments} concepts={concepts} onOpenPayment={onOpenPayment} />
+        </>
+      )}
+    </div>
+  );
+}

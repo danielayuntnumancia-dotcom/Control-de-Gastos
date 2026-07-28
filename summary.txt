@@ -1,0 +1,13 @@
+1. **Resumen breve:** Implementación de la sección Calendario completa (vistas Mes, Lista y Año), integrando el componente de detalles lateral sin formularios de escritura.
+2. **Archivos creados/modificados:** Creados `MonthlyView.tsx` (orquestador), `CalendarMonthView.tsx`, `CalendarListView.tsx`, `CalendarYearView.tsx`, `PaymentDetailsPanel.tsx` y `paymentUtils.ts`. Modificados `App.tsx` y `DashboardView.tsx`. Eliminado `PaymentList.tsx`.
+3. **Modelo/Consultas:** Reutilizada la suscripción global a Firestore (`onSnapshot` de `payments`), evitando duplicar lecturas.
+4. **Reglas:** Cálculo centralizado en `paymentUtils.ts` respetando el periodo original. Clasificación de pagos fuera del grid (fechas pendientes, sin día, aplazados).
+5. **Decisiones técnicas:**
+   - La vista de calendario mantiene una URL fija (estado local `selectedMonth`/`selectedYear`), cumpliendo "sin complejidad injustificada".
+   - Se usa una vista híbrida para "Año", navegando rápidamente a meses.
+6. **Índices de Firestore:** No se requiere ningún índice adicional al preexistente.
+7. **Cambios fuera de Calendario:** Reestructuración de utilidades de cálculo (`paymentUtils.ts`) y adecuación del `DashboardView` a éstas, lo cual simplifica y unifica la lógica de negocio.
+8. **Pruebas ejecutadas:** `npm run lint` y `npm run build` completadas sin errores de TypeScript. Revisión lógica de exclusión de cancelados y sumas de pagos.
+9. **Pruebas no ejecutadas:** No hay tests unitarios/E2E (Jest/Cypress) configurados en el proyecto.
+10. **Limitaciones:** Las acciones de "Marcar como Pagado" y "Aplazar" están en el panel de detalle pero deshabilitadas visualmente como exige el prompt para el siguiente bloque.
+11. **Siguiente bloque recomendado:** Gestión y operaciones de vencimiento (Flujo completo para marcar como pagado, editar importe real, cambiar fecha, y aplazar pagos).

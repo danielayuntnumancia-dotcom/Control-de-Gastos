@@ -1,0 +1,1 @@
+sed -i "s/<div key={concept.id} className=\"p-4 hover:bg-slate-50\">/<div key={concept.id} className=\"p-4 hover:bg-slate-50 cursor-pointer\" onClick={() => onSelect(concept)}>/g" src/components/ConceptsView.tsx

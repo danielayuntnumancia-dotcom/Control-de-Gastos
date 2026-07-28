@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the system.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique identifier."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the user was created."
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Concept": {
+      "title": "Concept",
+      "description": "A recurring payment definition.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "expectedAmount": { "type": "number" },
+        "color": { "type": "string" },
+        "periodicity": { "type": "string" },
+        "customMonths": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "dateType": { "type": "string" },
+        "day": { "type": ["number", "null"] },
+        "firstPeriod": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean" },
+        "exceptionNoticeDays": { "type": ["number", "null"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "category", "expectedAmount", "periodicity", "dateType", "firstPeriod", "active", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "A payment record (occurrence).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "conceptId": { "type": ["string", "null"] },
+        "concept": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "expectedAmount": { "type": "number" },
+        "actualAmount": { "type": ["number", "null"] },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "PAID", "DELAYED", "NO_NOTICE", "REFUNDED", "OVERDUE", "APPROX_OVERDUE", "PENDING_DATE", "CANCELED"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "concept", "dueDate", "expectedAmount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/concepts/{conceptId}": {
+      "schema": { "$ref": "#/entities/Concept" },
+      "description": "Stores recurring concepts."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Stores individual payments."
+    }
+  }
+}
