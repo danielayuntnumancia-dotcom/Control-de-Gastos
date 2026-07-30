@@ -1,1 +1,0 @@
-sed -i "/match \/concepts\/{conceptId}/i \ \ \ \ match \/price_versions\/{versionId} {\n      allow read, write: if isSignedIn() \&\& resource.data.userId == request.auth.uid;\n      allow create: if isSignedIn() \&\& request.auth.uid == request.resource.data.userId;\n    }\n" firestore.rules

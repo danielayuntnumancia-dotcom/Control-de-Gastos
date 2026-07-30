@@ -30,7 +30,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true);
-    let isInitialLoad = true;
+    let loadedSources = 0;
+    const checkLoaded = () => {
+      loadedSources++;
+      if (loadedSources >= 3) {
+        setLoading(false);
+      }
+    };
 
     const qPayments = query(
       collection(db, 'payments'),
@@ -49,8 +55,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } as Payment;
       });
       setPayments(data);
+      checkLoaded();
     }, (error) => {
       console.error("Error fetching payments:", error);
+      checkLoaded();
     });
 
     const qConcepts = query(
@@ -69,8 +77,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } as Concept;
       });
       setConcepts(data);
+      checkLoaded();
     }, (error) => {
       console.error("Error fetching concepts:", error);
+      checkLoaded();
     });
 
     const settingsRef = doc(db, 'settings', user.uid);
@@ -84,17 +94,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           generalNoticeDays: 5,
         });
       }
-      
-      if (isInitialLoad) {
-        setLoading(false);
-        isInitialLoad = false;
-      }
+      checkLoaded();
     }, (error) => {
       console.error("Error fetching settings:", error);
-      if (isInitialLoad) {
-        setLoading(false);
-        isInitialLoad = false;
-      }
+      checkLoaded();
     });
 
     return () => {

@@ -10,6 +10,7 @@ import {
 } from '../utils/paymentUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { AnnualBreakdowns } from './AnnualBreakdowns';
+import { MONTH_NAMES, MONTH_NAMES_SHORT } from '../utils/formatUtils';
 
 interface AnnualViewProps {
   payments: Payment[];
@@ -27,8 +28,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
   const [sortBy, setSortBy] = useState<'name' | 'previsto' | 'real'>('name');
   const [sortDesc, setSortDesc] = useState(false);
 
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const monthNamesShort = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const conceptsMap = useMemo(() => new Map(concepts.map(c => [c.id, c])), [concepts]);
 
   const thisYearPayments = filterPaymentsByYear(payments, globalYear);
   
@@ -41,7 +41,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
   const countCancelados = thisYearPayments.filter(p => p.status === 'CANCELED').length;
 
   const chartData = useMemo(() => {
-    return monthNamesShort.map((monthName, index) => {
+    return MONTH_NAMES_SHORT.map((monthName, index) => {
       const monthPayments = thisYearPayments.filter(p => p.originalPeriodMonth === index);
       return {
         name: monthName,
@@ -265,7 +265,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 w-48 shadow-[1px_0_0_0_#e2e8f0]">Concepto</th>
                     <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right w-24">Total Año</th>
-                    {monthNamesShort.map(m => (
+                    {MONTH_NAMES_SHORT.map(m => (
                       <th key={m} className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right min-w-[70px]">{m}</th>
                     ))}
                   </tr>
@@ -333,7 +333,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
           {/* Acordeón Mensual Mobile */}
           <div className="md:hidden space-y-3">
             <h3 className="text-base font-bold text-slate-800 mb-2">Desglose por Meses</h3>
-            {monthNames.map((monthName, index) => {
+            {MONTH_NAMES.map((monthName, index) => {
               const monthPayments = thisYearPayments.filter(p => p.originalPeriodMonth === index);
               if (monthPayments.length === 0) return null;
               
@@ -364,7 +364,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                   {isExpanded && (
                     <div className="divide-y divide-slate-100 border-t border-slate-200">
                       {monthPayments.map(p => {
-                        const concept = concepts.find(c => c.id === p.conceptId);
+                        const concept = conceptsMap.get(p.conceptId);
                         const isPending = PENDING_STATUSES.includes(p.status);
                         return (
                           <div 

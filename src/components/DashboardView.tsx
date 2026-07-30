@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
-import { Payment, Concept } from '../types';
-import { formatPaymentDate } from '../utils/formatUtils';
+import { Payment, Concept, UserSettings } from '../types';
+import { formatPaymentDate, MONTH_NAMES } from '../utils/formatUtils';
 import { CompactCalendar } from './CompactCalendar';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, calculateDiferenciaConfirmada, calculatePendientes, filterPaymentsByPeriod } from '../utils/paymentUtils';
 
 interface DashboardViewProps {
   payments: Payment[];
   concepts: Concept[];
-  settings: any; // We'll type this properly but any is fine for now
+  settings: UserSettings | null;
   onOpenPayment: (payment: Payment) => void;
   onNavigateToCalendar: () => void;
   onNavigateToConcepts: () => void;
@@ -17,7 +17,6 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
-
   // Helper to check if a payment belongs to the current month (by dueDate)
   const isCurrentMonth = (date: Date) => date.getMonth() === currentMonth && date.getFullYear() === currentYear;
   const isNextMonth = (date: Date) => {
@@ -26,8 +25,13 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
     return date.getMonth() === nextMonth && date.getFullYear() === nextYear;
   };
 
+
   const currentMonthPayments = filterPaymentsByPeriod(payments, currentMonth, currentYear);
   const nextMonthPayments = filterPaymentsByPeriod(payments, currentMonth === 11 ? 0 : currentMonth + 1, currentMonth === 11 ? currentYear + 1 : currentYear);
+
+  const conceptsMap = useMemo(() => {
+    return new Map(concepts.map(c => [c.id, c]));
+  }, [concepts]);
 
   // 5.1 Total Previsto (excludes cancelled)
   const totalPrevisto = calculateTotalPrevisto(currentMonthPayments);
@@ -48,8 +52,8 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   
   // Sort: Exact expired, approx expired, future, pending dates
   const sortedUpcoming = [...upcomingPaymentsAll].sort((a, b) => {
-    const aConcept = concepts.find(c => c.id === a.conceptId);
-    const bConcept = concepts.find(c => c.id === b.conceptId);
+    const aConcept = a.conceptId ? conceptsMap.get(a.conceptId) : undefined;
+    const bConcept = b.conceptId ? conceptsMap.get(b.conceptId) : undefined;
 
     const aIsNoDay = aConcept?.dateType === 'month_only' || a.status === 'PENDING_DATE';
     const bIsNoDay = bConcept?.dateType === 'month_only' || b.status === 'PENDING_DATE';
@@ -81,9 +85,12 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   });
 
   const validUpcoming = sortedUpcoming.filter(p => {
+    // Siempre mostrar pagos vencidos, independientemente de la configuración de notificaciones
+    if (p.status === 'OVERDUE' || p.status === 'APPROX_OVERDUE') return true;
+
     if (!settings?.notificationsEnabled) return false;
 
-    const concept = concepts.find(c => c.id === p.conceptId);
+    const concept = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
     const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
     
     if (p.status === 'PENDING_DATE') return true;
@@ -102,8 +109,6 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   });
 
   const nextPaymentsToShow = validUpcoming.slice(0, 7); // Up to 7 items
-
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
   if (concepts.length === 0 && payments.length === 0) {
     return (
@@ -126,7 +131,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
       
       {/* 5. Indicadores del mes actual */}
       <div>
-        <h2 className="text-xl font-bold text-slate-800 mb-4">{monthNames[currentMonth]} {currentYear}</h2>
+        <h2 className="text-xl font-bold text-slate-800 mb-4">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
         {currentMonthPayments.length === 0 ? (
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center">
             <p className="text-slate-500 font-medium">No hay pagos previstos para este mes.</p>
@@ -192,7 +197,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
               </div>
             ) : (
               nextPaymentsToShow.map(p => {
-                const concept = concepts.find(c => c.id === p.conceptId);
+                const concept = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
                 const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
                 
                 return (
@@ -242,7 +247,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
           {/* Resumen mes siguiente */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
             <div className="px-4 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-800 text-sm">Avance {monthNames[currentMonth === 11 ? 0 : currentMonth + 1]}</h2>
+              <h2 className="font-semibold text-slate-800 text-sm">Avance {MONTH_NAMES[currentMonth === 11 ? 0 : currentMonth + 1]}</h2>
               <button onClick={onNavigateToCalendar} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
                 Ver mes
               </button>

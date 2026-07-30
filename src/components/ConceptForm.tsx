@@ -4,6 +4,8 @@ import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'fire
 import { db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+import { generateOccurrences } from '../utils/occurrenceEngine';
+import { MONTH_NAMES_SHORT } from '../utils/formatUtils';
 
 interface ConceptFormProps {
   user: User | null;
@@ -101,68 +103,25 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   const yearsToGenerate = [currentYear, currentYear + 1];
 
   const previewOccurrences = useMemo(() => {
-    const occurrences: Omit<Payment, 'id' | 'userId' | 'createdAt'>[] = [];
-    
-    // Simple generation logic for preview
-    for (const year of yearsToGenerate) {
-      if (year < firstPeriodYear) continue;
-      
-      const startMonth = (year === firstPeriodYear) ? firstPeriodMonth : 0;
-      
-      for (let month = startMonth; month < 12; month++) {
-        let shouldGenerate = false;
-        
-        if (periodicity === 'monthly') shouldGenerate = true;
-        else if (periodicity === 'quarterly') {
-          // Every 3 months since firstPeriod
-          const monthsSinceStart = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-          if (monthsSinceStart % 3 === 0) shouldGenerate = true;
-        }
-        else if (periodicity === 'semiannual') {
-          const monthsSinceStart = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-          if (monthsSinceStart % 6 === 0) shouldGenerate = true;
-        }
-        else if (periodicity === 'annual') {
-          if (month === firstPeriodMonth) shouldGenerate = true;
-        }
-        else if (periodicity === 'custom_months') {
-          if (customMonths.includes(month)) shouldGenerate = true;
-        }
-        else if (periodicity === 'one_time') {
-          if (year === firstPeriodYear && month === firstPeriodMonth) shouldGenerate = true;
-        }
+    const occurrences = generateOccurrences({
+      periodicity,
+      dateType,
+      day: day === '' ? null : Number(day),
+      firstPeriodYear,
+      firstPeriodMonth,
+      customMonths
+    }, yearsToGenerate);
 
-        if (shouldGenerate) {
-          // Calculate date
-          let status: Payment['status'] = 'PENDING';
-          const targetDay = day === '' ? 1 : Number(day);
-          
-          let dueDate = new Date(year, month, targetDay);
-          if (dateType !== 'month_only' && dueDate.getMonth() !== month) {
-             status = 'PENDING_DATE';
-             dueDate = new Date(year, month, 1); 
-          } else if (dateType === 'month_only') {
-             dueDate = new Date(year, month, 1);
-          } else if (dateType === 'approximate') {
-             status = 'PENDING_DATE';
-          }
-
-          occurrences.push({
-            conceptId: 'preview',
-            concept: name,
-            expectedAmount: amountCents,
-            actualAmount: null,
-            status,
-            dueDate,
-            originalPeriodMonth: month,
-            originalPeriodYear: year,
-          });
-          
-          if (periodicity === 'one_time') break;
-        }
-      }
-    }
-    return occurrences.slice(0, 6);
+    return occurrences.map(occ => ({
+      conceptId: 'preview',
+      concept: name,
+      expectedAmount: amountCents,
+      actualAmount: null,
+      status: occ.status,
+      dueDate: occ.dueDate,
+      originalPeriodMonth: occ.originalPeriodMonth,
+      originalPeriodYear: occ.originalPeriodYear,
+    })).slice(0, 6);
   }, [periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, name, amountCents]);
 
   const handleSave = async () => {
@@ -232,65 +191,31 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         }
 
         // Generate occurrences
-        for (const year of yearsToGenerate) {
-          if (year < firstPeriodYear) continue;
-          const startMonth = (year === firstPeriodYear) ? firstPeriodMonth : 0;
-          
-          for (let month = startMonth; month < 12; month++) {
-            let shouldGenerate = false;
-            
-            if (periodicity === 'monthly') shouldGenerate = true;
-            else if (periodicity === 'quarterly') {
-              const monthsSinceStart = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-              if (monthsSinceStart % 3 === 0) shouldGenerate = true;
-            }
-            else if (periodicity === 'semiannual') {
-              const monthsSinceStart = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-              if (monthsSinceStart % 6 === 0) shouldGenerate = true;
-            }
-            else if (periodicity === 'annual') {
-              if (month === firstPeriodMonth) shouldGenerate = true;
-            }
-            else if (periodicity === 'custom_months') {
-              if (customMonths.includes(month)) shouldGenerate = true;
-            }
-            else if (periodicity === 'one_time') {
-              if (year === firstPeriodYear && month === firstPeriodMonth) shouldGenerate = true;
-            }
+        const occurrences = generateOccurrences({
+          periodicity,
+          dateType,
+          day: dateType === 'month_only' ? null : Number(day),
+          firstPeriodYear,
+          firstPeriodMonth,
+          customMonths
+        }, yearsToGenerate);
 
-            if (shouldGenerate) {
-              let status: Payment['status'] = 'PENDING';
-              const targetDay = day === '' ? 1 : Number(day);
-              let dueDate = new Date(year, month, targetDay);
-              if (dateType !== 'month_only' && dueDate.getMonth() !== month) {
-                 status = 'PENDING_DATE';
-                 dueDate = new Date(year, month, 1); 
-              } else if (dateType === 'month_only') {
-                 dueDate = new Date(year, month, 1);
-              } else if (dateType === 'approximate') {
-                 status = 'PENDING_DATE';
-              }
-
-              // Only generate if it's in the future when editing
-              const now = new Date();
-              if (!isEdit || dueDate >= now) {
-                const occRef = doc(collection(db, 'payments'));
-                batch.set(occRef, {
-                  userId: user.uid,
-                  conceptId: conceptRef.id,
-                  concept: conceptData.name,
-                  expectedAmount: amountCents,
-                  actualAmount: null,
-                  status,
-                  dueDate,
-                  originalPeriodMonth: month,
-                  originalPeriodYear: year,
-                  createdAt: new Date()
-                });
-              }
-              
-              if (periodicity === 'one_time') break;
-            }
+        for (const occ of occurrences) {
+          const now = new Date();
+          if (!isEdit || occ.dueDate >= now) {
+            const occRef = doc(collection(db, 'payments'));
+            batch.set(occRef, {
+              userId: user.uid,
+              conceptId: conceptRef.id,
+              concept: conceptData.name,
+              expectedAmount: amountCents,
+              actualAmount: null,
+              status: occ.status,
+              dueDate: occ.dueDate,
+              originalPeriodMonth: occ.originalPeriodMonth,
+              originalPeriodYear: occ.originalPeriodYear,
+              createdAt: new Date()
+            });
           }
         }
       } else if (isEdit && !ruleChanged) {
@@ -314,15 +239,14 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
 
       await batch.commit();
       onClose();
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      alert("Error al guardar: " + e);
+      alert("Error al guardar: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -445,7 +369,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                       onChange={e => setFirstPeriodMonth(Number(e.target.value))}
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                     >
-                      {months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                      {MONTH_NAMES_SHORT.map((m, i) => <option key={i} value={i}>{m}</option>)}
                     </select>
                     <input 
                       type="number"
@@ -461,7 +385,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Selecciona los meses</label>
                   <div className="flex flex-wrap gap-2">
-                    {months.map((m, i) => (
+                    {MONTH_NAMES_SHORT.map((m, i) => (
                       <button 
                         key={i}
                         onClick={() => handleToggleMonth(i)}
@@ -515,10 +439,10 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                         <li key={i} className="flex justify-between items-center text-sm border-b border-slate-100 last:border-0 pb-2 last:pb-0">
                           <span className="text-slate-600">
                             {dateType === 'month_only' 
-                              ? `${months[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()} (sin día)` 
+                              ? `${MONTH_NAMES_SHORT[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()} (sin día)` 
                               : dateType === 'approximate'
-                              ? `Aprox. ${occ.dueDate.getDate()} de ${months[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()}`
-                              : `${occ.dueDate.getDate()} de ${months[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()}`
+                              ? `Aprox. ${occ.dueDate.getDate()} de ${MONTH_NAMES_SHORT[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()}`
+                              : `${occ.dueDate.getDate()} de ${MONTH_NAMES_SHORT[occ.dueDate.getMonth()]} ${occ.dueDate.getFullYear()}`
                             }
                           </span>
                           <div className="flex items-center gap-3">

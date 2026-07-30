@@ -14,10 +14,12 @@ interface AnnualBreakdownsProps {
 }
 
 export function AnnualBreakdowns({ payments, concepts, onOpenPayment }: AnnualBreakdownsProps) {
+  const conceptsMap = useMemo(() => new Map(concepts.map(c => [c.id, c])), [concepts]);
+
   const byCategory = useMemo(() => {
     const cats = new Map<string, Payment[]>();
     payments.forEach(p => {
-      const c = concepts.find(c => c.id === p.conceptId);
+      const c = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
       const cat = c?.category || 'Sin categoría';
       if (!cats.has(cat)) cats.set(cat, []);
       cats.get(cat)!.push(p);

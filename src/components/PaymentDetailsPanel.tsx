@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Payment, Concept } from '../types';
-import { formatPaymentDate } from '../utils/formatUtils';
+import { formatPaymentDate, MONTH_NAMES } from '../utils/formatUtils';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
@@ -13,7 +13,7 @@ interface PaymentDetailsPanelProps {
 type ActionState = 'view' | 'pay' | 'correct' | 'delay' | 'resolve_date' | 'cancel' | 'saving' | 'error';
 
 export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetailsPanelProps) {
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  
   
   const [actionState, setActionState] = useState<ActionState>('view');
   const [errorMessage, setErrorMessage] = useState('');
@@ -83,7 +83,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   const currentActualFormatted = payment.actualAmount !== null ? (payment.actualAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : null;
   const currentDiferencia = payment.status === 'PAID' && payment.actualAmount !== null ? payment.actualAmount - payment.expectedAmount : null;
 
-  const handleUpdate = async (updates: Partial<Payment>) => {
+  const handleUpdate = async (updates: Partial<Payment>, originalAction: ActionState) => {
     setActionState('saving');
     setErrorMessage('');
     try {
@@ -93,10 +93,10 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
         updatedAt: new Date()
       });
       setActionState('view');
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setErrorMessage(e.message || 'Error al guardar');
-      setActionState('error'); // Wait, better just back to previous actionState or keep 'error' state
+      setErrorMessage(e instanceof Error ? e.message : 'Error al guardar');
+      setActionState(originalAction);
     }
   };
 
@@ -111,7 +111,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       actualAmount: Math.round(amt * 100),
       actualDate: new Date(y, m - 1, d),
       description: description.trim()
-    });
+    }, actionState);
   };
 
   const submitDelay = () => {
@@ -138,7 +138,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       isDelayed: delayedMark,
       dueDate: newDueDate,
       description: description.trim()
-    });
+    }, actionState);
   };
 
   const submitRestoreDate = () => {
@@ -159,14 +159,14 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       isDelayed: false,
       dueDate: newDueDate,
       description: description.trim()
-    });
+    }, actionState);
   };
 
   const submitCancel = () => {
     handleUpdate({
       status: 'CANCELED',
       description: description.trim()
-    });
+    }, actionState);
   };
 
   const submitReopen = () => {
@@ -176,12 +176,8 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
     const isPast = payment.dueDate < today;
     
     let newStatus: Payment['status'] = 'PENDING';
-    if (payment.dueDate.getMonth() !== payment.originalPeriodMonth && payment.dueDate.getFullYear() !== payment.originalPeriodYear) {
-      // Actually we just retain the existing dates, so we compute status normally, and isDelayed is preserved.
-      // But wait! If it's a PENDING_DATE (invalid day), it might be different.
-    }
-    
-    if (concept?.dateType !== 'month_only' && payment.dueDate.getMonth() !== originalMonth && !payment.isDelayed) {
+
+    if (concept?.dateType !== 'month_only' && (payment.dueDate.getMonth() !== originalMonth || payment.dueDate.getFullYear() !== originalYear) && !payment.isDelayed) {
       newStatus = 'PENDING_DATE';
     } else if (isPast) {
       if (concept?.dateType === 'exact') newStatus = 'OVERDUE';
@@ -192,7 +188,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       status: newStatus,
       actualAmount: null,
       actualDate: undefined
-    });
+    }, actionState);
   };
 
   return (
@@ -223,7 +219,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Periodo original</p>
-              <p className="text-sm font-semibold text-slate-800">{monthNames[originalMonth]} {originalYear}</p>
+              <p className="text-sm font-semibold text-slate-800">{MONTH_NAMES[originalMonth]} {originalYear}</p>
             </div>
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Fecha / Precisión</p>
@@ -266,7 +262,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                   <span className="material-symbols-outlined text-blue-500">update</span>
                   <div>
                     <h4 className="text-sm font-bold text-blue-800 mb-1">Pago Aplazado</h4>
-                    <p className="text-xs text-blue-700">Este movimiento pertenece a {monthNames[originalMonth]} {originalYear} pero ha sido aplazado.</p>
+                    <p className="text-xs text-blue-700">Este movimiento pertenece a {MONTH_NAMES[originalMonth]} {originalYear} pero ha sido aplazado.</p>
                   </div>
                 </div>
               )}
@@ -354,7 +350,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 <div className="flex items-start gap-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
                   <input type="checkbox" id="delayed" checked={delayedMark} onChange={e => setDelayedMark(e.target.checked)} className="mt-1" />
                   <label htmlFor="delayed" className="text-sm text-blue-800">
-                    Marcar como pago aplazado. No se sumará al presupuesto del nuevo mes, sino al periodo original ({monthNames[originalMonth]}).
+                    Marcar como pago aplazado. No se sumará al presupuesto del nuevo mes, sino al periodo original ({MONTH_NAMES[originalMonth]}).
                   </label>
                 </div>
               )}

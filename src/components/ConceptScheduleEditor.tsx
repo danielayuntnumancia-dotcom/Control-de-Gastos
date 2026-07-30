@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Concept, Payment } from '../types';
 import { db } from '../lib/firebase';
 import { doc, updateDoc, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
+import { generateOccurrences } from '../utils/occurrenceEngine';
+import { MONTH_NAMES } from '../utils/formatUtils';
 
 interface Props {
   concept: Concept;
@@ -9,8 +11,6 @@ interface Props {
   onCancel: () => void;
   onSaved: () => void;
 }
-
-const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: Props) {
   const [periodicity, setPeriodicity] = useState<Concept['periodicity']>(concept.periodicity);
@@ -43,48 +43,23 @@ export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: 
     const startYear = Math.min(firstPeriodYear, currentYear);
     const endYear = currentYear + 1;
 
-    const newOccurrences: { month: number, year: number, dueDate: Date, status: any }[] = [];
-    
-    for (let year = startYear; year <= endYear; year++) {
-      for (let month = 0; month < 12; month++) {
-        if (year < firstPeriodYear || (year === firstPeriodYear && month < firstPeriodMonth)) continue;
-        
-        let shouldGenerate = false;
-        if (periodicity === 'monthly') shouldGenerate = true;
-        else if (periodicity === 'quarterly') {
-          const mSince = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-          if (mSince % 3 === 0) shouldGenerate = true;
-        }
-        else if (periodicity === 'semiannual') {
-          const mSince = (year - firstPeriodYear) * 12 + (month - firstPeriodMonth);
-          if (mSince % 6 === 0) shouldGenerate = true;
-        }
-        else if (periodicity === 'annual') {
-          if (month === firstPeriodMonth) shouldGenerate = true;
-        }
-        else if (periodicity === 'custom_months') {
-          if (customMonths.includes(month)) shouldGenerate = true;
-        }
-        else if (periodicity === 'one_time') {
-          if (year === firstPeriodYear && month === firstPeriodMonth) shouldGenerate = true;
-        }
+    const years = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
 
-        if (shouldGenerate) {
-          const targetDay = Number(day) || 1;
-          let dueDate = new Date(year, month, targetDay);
-          let status: any = 'PENDING';
-          if (dateType !== 'month_only' && dueDate.getMonth() !== month) {
-            status = 'PENDING_DATE';
-            dueDate = new Date(year, month, 1);
-          } else if (dateType === 'month_only') {
-            dueDate = new Date(year, month, 1);
-          } else if (dateType === 'approximate') {
-            status = 'PENDING_DATE';
-          }
-          newOccurrences.push({ month, year, dueDate, status });
-        }
-      }
-    }
+    const newOccurrencesRaw = generateOccurrences({
+      periodicity,
+      dateType,
+      day: dateType === 'month_only' ? null : Number(day),
+      firstPeriodYear,
+      firstPeriodMonth,
+      customMonths
+    }, years);
+
+    const newOccurrences = newOccurrencesRaw.map(occ => ({
+      month: occ.originalPeriodMonth,
+      year: occ.originalPeriodYear,
+      dueDate: occ.dueDate,
+      status: occ.status
+    }));
 
     const toCreate: typeof newOccurrences = [];
     const toKeep: Payment[] = [];
@@ -184,9 +159,9 @@ export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: 
 
       await batch.commit();
       onSaved();
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      alert("Error al guardar programación");
+      alert("Error al guardar programación: " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -214,7 +189,7 @@ export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Selecciona los meses</label>
                 <div className="flex flex-wrap gap-1">
-                  {monthsList.map((m, i) => (
+                  {MONTH_NAMES.map((m, i) => (
                     <button 
                       key={i} 
                       onClick={() => toggleMonth(i)}
@@ -262,7 +237,7 @@ export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: 
                 onChange={e => setFirstPeriodMonth(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               >
-                {monthsList.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
               </select>
             </div>
             <div>

@@ -4,6 +4,7 @@ import { UserSettings, Payment, Concept } from '../types';
 import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { generateAnnualPayments } from '../utils/paymentGenerator';
+import packageJson from '../../package.json';
 
 interface SettingsViewProps {
   user: User;
@@ -60,8 +61,8 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
       }, { merge: true });
       
       setSaveMessage({ type: 'success', text: 'Configuración guardada correctamente.' });
-    } catch (error: any) {
-      setSaveMessage({ type: 'error', text: error.message || 'Error al guardar la configuración.' });
+    } catch (error: unknown) {
+      setSaveMessage({ type: 'error', text: error instanceof Error ? error.message : 'Error al guardar la configuración.' });
     } finally {
       setIsSaving(false);
     }
@@ -108,8 +109,8 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
       await batch.commit();
       
       setGenerateMessage({ type: 'success', text: `Se han generado ${toGenerate.length} vencimientos nuevos para ${nextYearToGenerate}.` });
-    } catch (error: any) {
-      setGenerateMessage({ type: 'error', text: error.message || 'Error al generar el año.' });
+    } catch (error: unknown) {
+      setGenerateMessage({ type: 'error', text: error instanceof Error ? error.message : 'Error al generar el año.' });
     } finally {
       setIsGenerating(false);
     }
@@ -125,31 +126,29 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
     setDeleteMessage(null);
 
     try {
-      // Basic approach: query all documents owned by user in known collections
-      // collections: concepts, payments, settings
-      const batch = writeBatch(db);
-      
-      // Concepts
       const conceptsQuery = await getDocs(query(collection(db, 'concepts'), where('userId', '==', user.uid)));
-      conceptsQuery.docs.forEach(d => {
-        batch.delete(d.ref);
-      });
-
-      // Payments
       const paymentsQuery = await getDocs(query(collection(db, 'payments'), where('userId', '==', user.uid)));
-      paymentsQuery.docs.forEach(d => {
-        batch.delete(d.ref);
-      });
-
-      // Settings
       const settingsRef = doc(db, 'settings', user.uid);
-      batch.delete(settingsRef);
-
-      await batch.commit();
+      
+      const allDocs = [...conceptsQuery.docs, ...paymentsQuery.docs];
+      
+      // Delete in chunks of 500 to avoid Firestore limits
+      for (let i = 0; i < allDocs.length; i += 499) { // 499 max + settingsRef in the last one
+        const chunk = allDocs.slice(i, i + 499);
+        const batch = writeBatch(db);
+        for (const d of chunk) {
+          batch.delete(d.ref);
+        }
+        if (i + 499 >= allDocs.length) {
+          batch.delete(settingsRef); // Delete settings on the last batch
+        }
+        await batch.commit();
+      }
 
       // Logout after deleting
       onLogout();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error(error);
       setDeleteMessage({ type: 'error', text: 'Error al eliminar datos. Es posible que haya demasiados documentos para borrar en lote, prueba más tarde.' });
       setIsDeleting(false);
     }
@@ -314,7 +313,7 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-slate-500">Versión</span>
-              <span className="text-sm font-bold text-slate-800">1.0.0</span>
+              <span className="text-sm font-bold text-slate-800">{packageJson.version}</span>
             </div>
           </div>
         </section>

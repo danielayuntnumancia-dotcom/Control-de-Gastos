@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Concept } from '../types';
 import { doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ConceptsViewProps {
   concepts: Concept[];
@@ -14,6 +15,34 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
   const [sortBy, setSortBy] = useState<'name' | 'next_due' | 'amount'>('name');
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false, confirmText = 'Confirmar') => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        onConfirm();
+      },
+      isDestructive,
+      confirmText
+    });
+  };
 
   const filteredConcepts = useMemo(() => {
     let result = concepts;
@@ -48,40 +77,54 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
     return result;
   }, [concepts, searchTerm, filterCategory, filterStatus, sortBy]);
 
-  const handleToggleStatus = async (concept: Concept) => {
-    try {
-      if (concept.active) {
-        if (!confirm("¿Deseas desactivar este concepto? No se generarán nuevos vencimientos, pero se mantendrá el historial.")) {
-          return;
-        }
+  const handleToggleStatus = (concept: Concept) => {
+    const doUpdate = async () => {
+      try {
+        await updateDoc(doc(db, 'concepts', concept.id), {
+          active: !concept.active,
+          updatedAt: new Date()
+        });
+      } catch (e: unknown) {
+        console.error(e);
       }
-      await updateDoc(doc(db, 'concepts', concept.id), {
-        active: !concept.active,
-        updatedAt: new Date()
-      });
-    } catch (e) {
-      console.error(e);
+    };
+
+    if (concept.active) {
+      openConfirm(
+        'Desactivar concepto',
+        '¿Deseas desactivar este concepto? No se generarán nuevos vencimientos, pero se mantendrá el historial.',
+        doUpdate,
+        true,
+        'Desactivar'
+      );
+    } else {
+      doUpdate();
     }
   };
 
-  const handleDelete = async (concept: Concept) => {
-    if (!confirm(`¿Eliminar definitivamente el concepto "${concept.name}"? Solo usar si fue creado por error.`)) {
-      return;
-    }
-    try {
-      // Find payments with this concept ID
-      const q = query(collection(db, 'payments'), where('conceptId', '==', concept.id));
-      const snap = await getDocs(q);
-      
-      if (!snap.empty) {
-        alert("No se puede eliminar un concepto que ya tiene pagos registrados (historial real). Por favor, desactívalo en su lugar.");
-        return;
-      }
+  const handleDelete = (concept: Concept) => {
+    openConfirm(
+      'Eliminar concepto',
+      `¿Eliminar definitivamente el concepto "${concept.name}"? Solo usar si fue creado por error.`,
+      async () => {
+        try {
+          // Find payments with this concept ID
+          const q = query(collection(db, 'payments'), where('conceptId', '==', concept.id));
+          const snap = await getDocs(q);
+          
+          if (!snap.empty) {
+            alert("No se puede eliminar un concepto que ya tiene pagos registrados (historial real). Por favor, desactívalo en su lugar.");
+            return;
+          }
 
-      await deleteDoc(doc(db, 'concepts', concept.id));
-    } catch (e) {
-      console.error(e);
-    }
+          await deleteDoc(doc(db, 'concepts', concept.id));
+        } catch (e: unknown) {
+          console.error(e);
+        }
+      },
+      true,
+      'Eliminar'
+    );
   };
 
   return (
@@ -268,6 +311,15 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
           </>
         )}
       </div>
+      <ConfirmDialog 
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        isDestructive={confirmDialog.isDestructive}
+        confirmText={confirmDialog.confirmText}
+      />
     </div>
   );
 }

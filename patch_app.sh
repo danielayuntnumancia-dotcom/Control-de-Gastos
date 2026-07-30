@@ -1,1 +1,0 @@
-sed -i "s/import { ConceptsView } from '.\/components\/ConceptsView';/import { ConceptsView } from '.\/components\/ConceptsView';\nimport { ConceptDetailsView } from '.\/components\/ConceptDetailsView';/g" src/App.tsx
