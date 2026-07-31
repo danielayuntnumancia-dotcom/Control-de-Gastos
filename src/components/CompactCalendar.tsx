@@ -31,9 +31,20 @@ export function CompactCalendar({ payments, concepts, currentMonth, currentYear,
     if (p.dueDate.getMonth() !== currentMonth || p.dueDate.getFullYear() !== currentYear) return;
     
     const concept = concepts.find(c => c.id === p.conceptId);
-    const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
-
-    if (isNoDay) {
+    
+    if (p.status === 'PENDING_DATE') {
+      if (concept?.dateType === 'approximate') {
+        const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+        for (let d = targetDay - 1; d <= targetDay + 1; d++) {
+          if (d >= 1 && d <= daysInMonth) {
+            if (!paymentsByDay.has(d)) paymentsByDay.set(d, []);
+            paymentsByDay.get(d)!.push(p);
+          }
+        }
+      } else {
+        noDayPayments.push(p);
+      }
+    } else if (concept?.dateType === 'month_only') {
       noDayPayments.push(p);
     } else {
       const day = p.dueDate.getDate();

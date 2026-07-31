@@ -3,6 +3,8 @@ import { Concept } from '../types';
 import { doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ConfirmDialog } from './ConfirmDialog';
+import { paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
+import { useAuth } from '../context/AuthContext';
 
 interface ConceptsViewProps {
   concepts: Concept[];
@@ -11,6 +13,7 @@ interface ConceptsViewProps {
 }
 
 export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
@@ -80,12 +83,58 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const handleToggleStatus = (concept: Concept) => {
     const doUpdate = async () => {
       try {
-        await updateDoc(doc(db, 'concepts', concept.id), {
+        const batch = writeBatch(db);
+        const conceptRef = doc(db, 'concepts', concept.id);
+        
+        batch.update(conceptRef, {
           active: !concept.active,
           updatedAt: new Date()
         });
+
+        // Update future payments
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        const q = query(
+          collection(db, 'payments'),
+          where('conceptId', '==', concept.id),
+          where('userId', '==', user?.uid)
+        );
+        const snap = await getDocs(q);
+
+        snap.forEach(d => {
+          const data = d.data();
+          if (!data.dueDate || typeof data.dueDate.toDate !== 'function') return;
+          
+          const dueDate = data.dueDate.toDate();
+          
+          if (concept.active) {
+            // It's being DEACTIVATED: Cancel ALL pending payments, even past ones
+            if (data.status === 'PENDING' || data.status === 'PENDING_DATE') {
+              batch.update(d.ref, { status: 'CANCELED' });
+            }
+          } else {
+            // It's being ACTIVATED: Restore canceled payments
+            // Only restore future ones
+            if (dueDate >= now && data.status === 'CANCELED') {
+              const params = paramsFromConcept(concept);
+              const year = data.originalPeriodYear !== undefined ? data.originalPeriodYear : dueDate.getFullYear();
+              const month = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : dueDate.getMonth();
+              
+              const { status } = computeDueDateAndStatus(year, month, params);
+              
+              batch.update(d.ref, { 
+                status: status,
+                expectedAmount: concept.expectedAmount
+              });
+            }
+          }
+        });
+
+        await batch.commit();
       } catch (e: unknown) {
         console.error(e);
+        alert('Error: ' + (e instanceof Error ? e.message : String(e)));
       }
     };
 
@@ -231,14 +280,14 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                           <span className="material-symbols-outlined text-[20px]">edit</span>
                         </button>
                         <button 
-                          onClick={() => handleToggleStatus(concept)}
+                          onClick={(e) => { e.stopPropagation(); handleToggleStatus(concept); }}
                           className="text-slate-400 hover:text-indigo-600 transition-colors mr-3"
                           title={concept.active ? 'Desactivar' : 'Activar'}
                         >
                           <span className="material-symbols-outlined text-[20px]">{concept.active ? 'block' : 'check_circle'}</span>
                         </button>
                         <button 
-                          onClick={() => handleDelete(concept)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(concept); }}
                           className="text-slate-400 hover:text-red-600 transition-colors"
                           title="Eliminar definitivamente"
                         >
@@ -290,14 +339,14 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                         <span className="material-symbols-outlined text-[18px]">edit</span>
                       </button>
                       <button 
-                        onClick={() => handleToggleStatus(concept)}
+                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(concept); }}
                         className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                         title={concept.active ? 'Desactivar' : 'Activar'}
                       >
                         <span className="material-symbols-outlined text-[18px]">{concept.active ? 'block' : 'check_circle'}</span>
                       </button>
                       <button 
-                        onClick={() => handleDelete(concept)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(concept); }}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Eliminar definitivamente"
                       >

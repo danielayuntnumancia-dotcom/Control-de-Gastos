@@ -28,6 +28,7 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
   const aplazados: Payment[] = [];
 
   payments.forEach(p => {
+    if (p.status === 'CANCELED') return;
     if (p.dueDate.getMonth() !== month || p.dueDate.getFullYear() !== year) return;
 
     const concept = concepts.find(c => c.id === p.conceptId);
@@ -35,14 +36,14 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
 
     if (p.isDelayed) {
       aplazados.push(p);
+    } else if (concept.dateType === 'approximate') {
+      const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+      if (!approxDates.has(targetDay)) approxDates.set(targetDay, []);
+      approxDates.get(targetDay)!.push(p);
     } else if (p.status === 'PENDING_DATE') {
       fechaPendiente.push(p);
     } else if (concept.dateType === 'month_only') {
       sinDia.push(p);
-    } else if (concept.dateType === 'approximate') {
-      const day = p.dueDate.getDate();
-      if (!approxDates.has(day)) approxDates.set(day, []);
-      approxDates.get(day)!.push(p);
     } else {
       const day = p.dueDate.getDate();
       if (!exactDates.has(day)) exactDates.set(day, []);

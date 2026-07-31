@@ -86,7 +86,7 @@ function shouldGenerateForPeriod(
  * Nunca trasladamos al último día del mes: el estado PENDING_DATE es suficiente
  * para indicar que la fecha exacta está pendiente de resolución.
  */
-function computeDueDateAndStatus(
+export function computeDueDateAndStatus(
   year: number,
   month: number,
   params: OccurrenceParams
@@ -157,13 +157,17 @@ export function generateOccurrences(
  * Extrae los OccurrenceParams de un objeto Concept.
  * Permite pasar un Concept directamente a generateOccurrences.
  */
-export function paramsFromConcept(concept: Concept): OccurrenceParams {
+export function paramsFromConcept(concept: any): OccurrenceParams {
+  const firstPeriod = concept.firstPeriod && typeof concept.firstPeriod.toDate === 'function'
+    ? concept.firstPeriod.toDate()
+    : (concept.firstPeriod instanceof Date ? concept.firstPeriod : new Date(concept.firstPeriod || Date.now()));
+
   return {
     periodicity: concept.periodicity,
     dateType: concept.dateType,
     day: concept.day,
-    firstPeriodYear: concept.firstPeriod.getFullYear(),
-    firstPeriodMonth: concept.firstPeriod.getMonth(),
+    firstPeriodYear: firstPeriod.getFullYear(),
+    firstPeriodMonth: firstPeriod.getMonth(),
     customMonths: concept.customMonths ?? [],
   };
 }

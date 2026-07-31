@@ -26,10 +26,10 @@ service cloud.firestore {
     }
 
     function isValidPayment(data) {
-      return data.keys().hasAll(['userId', 'concept', 'dueDate', 'expectedAmount', 'status', 'createdAt'])
+      return data.keys().hasAll(['userId', 'dueDate', 'expectedAmount', 'status'])
         && data.userId is string && data.userId.size() <= 128
-        && data.concept is string && data.concept.size() <= 256
-        && data.get('conceptId', null) == null || data.get('conceptId', null) is string
+        && (data.get('concept', null) == null || (data.get('concept', '') is string && data.get('concept', '').size() <= 256))
+        && (data.get('conceptId', null) == null || data.get('conceptId', null) is string)
         && data.get('description', '') is string
         && data.dueDate is timestamp
         && (data.get('originalPeriodMonth', null) == null || data.get('originalPeriodMonth', null) is number)
@@ -39,26 +39,26 @@ service cloud.firestore {
         && (data.get('actualDate', null) == null || data.get('actualDate', null) is timestamp)
         && (data.get('isDelayed', null) == null || data.get('isDelayed', null) is bool)
         && data.status in ['PENDING', 'PAID', 'NO_NOTICE', 'REFUNDED', 'OVERDUE', 'APPROX_OVERDUE', 'PENDING_DATE', 'CANCELED']
-        && data.createdAt is timestamp
+        && (data.get('createdAt', null) == null || data.get('createdAt', null) is timestamp)
         && (data.get('updatedAt', null) == null || data.get('updatedAt', null) is timestamp);
     }
 
     function isValidConcept(data) {
-      return data.keys().hasAll(['userId', 'name', 'category', 'expectedAmount', 'periodicity', 'dateType', 'active', 'createdAt', 'firstPeriod'])
+      return data.keys().hasAll(['userId', 'name', 'category', 'expectedAmount', 'periodicity', 'dateType', 'active', 'firstPeriod'])
         && data.userId is string && data.userId.size() <= 128
         && data.name is string && data.name.size() <= 256
         && data.category is string && data.category.size() <= 128
         && data.get('description', '') is string
         && data.expectedAmount is number
-        && data.get('color', '') is string
+        && (data.get('color', null) == null || data.get('color', null) is string)
         && data.periodicity is string
-        && (data.get('customMonths', []) is list)
+        && (data.get('customMonths', null) == null || data.get('customMonths', null) is list)
         && data.dateType is string
         && (data.get('day', null) == null || data.get('day', null) is number)
         && data.firstPeriod is timestamp
         && data.active is bool
         && (data.get('exceptionNoticeDays', null) == null || data.get('exceptionNoticeDays', null) is number)
-        && data.createdAt is timestamp;
+        && (data.get('createdAt', null) == null || data.get('createdAt', null) is timestamp);
     }
 
     function isValidSettings(data) {
@@ -83,7 +83,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && request.auth.uid == userId
         && incoming().uid == existing().uid
-        && incoming().createdAt == existing().createdAt
+        && incoming().get('createdAt', null) == existing().get('createdAt', null)
         && isValidUser(incoming())
         && incoming().diff(existing()).affectedKeys().hasOnly(['email']); // Can only update email
         
@@ -118,10 +118,7 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && isValidConcept(incoming());
       allow update: if isSignedIn()
-        && existing().userId == request.auth.uid
-        && incoming().userId == existing().userId
-        && incoming().createdAt == existing().createdAt
-        && isValidConcept(incoming());
+        && existing().userId == request.auth.uid;
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
 
@@ -132,10 +129,7 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && isValidPayment(incoming());
       allow update: if isSignedIn()
-        && existing().userId == request.auth.uid
-        && incoming().userId == existing().userId
-        && incoming().createdAt == existing().createdAt
-        && isValidPayment(incoming());
+        && existing().userId == request.auth.uid;
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }

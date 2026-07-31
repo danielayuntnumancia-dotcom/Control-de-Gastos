@@ -30,9 +30,9 @@ export function calculatePendientes(payments: Payment[]): { total: number, count
 }
 
 export function filterPaymentsByPeriod(payments: Payment[], month: number, year: number): Payment[] {
-  return payments.filter(p => p.originalPeriodMonth === month && p.originalPeriodYear === year);
+  return payments.filter(p => p.originalPeriodMonth === month && p.originalPeriodYear === year && p.status !== 'CANCELED');
 }
 
 export function filterPaymentsByYear(payments: Payment[], year: number): Payment[] {
-  return payments.filter(p => p.originalPeriodYear === year);
+  return payments.filter(p => p.originalPeriodYear === year && p.status !== 'CANCELED');
 }

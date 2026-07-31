@@ -179,7 +179,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
           const q = query(
             collection(db, 'payments'), 
             where('conceptId', '==', conceptRef.id),
-            where('status', 'in', ['PENDING', 'PENDING_DATE'])
+            where('userId', '==', user.uid),
+            where('status', 'in', ['PENDING', 'PENDING_DATE', 'CANCELED'])
           );
           const snap = await getDocs(q);
           snap.forEach(d => {
@@ -210,7 +211,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               concept: conceptData.name,
               expectedAmount: amountCents,
               actualAmount: null,
-              status: occ.status,
+              status: active ? occ.status : 'CANCELED',
               dueDate: occ.dueDate,
               originalPeriodMonth: occ.originalPeriodMonth,
               originalPeriodYear: occ.originalPeriodYear,
@@ -221,18 +222,55 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       } else if (isEdit && !ruleChanged) {
         // If we just edited basic details, update the pending future occurrences so they have the new name/amount
         const now = new Date();
+        now.setHours(0,0,0,0);
         const q = query(
           collection(db, 'payments'), 
           where('conceptId', '==', conceptRef.id),
-          where('status', 'in', ['PENDING', 'PENDING_DATE'])
+          where('userId', '==', user.uid),
+          where('status', 'in', ['PENDING', 'PENDING_DATE', 'CANCELED'])
         );
         const snap = await getDocs(q);
+        
         snap.forEach(d => {
-          if (d.data().dueDate.toDate() >= now) {
-            batch.update(d.ref, {
-              concept: conceptData.name,
-              expectedAmount: amountCents
-            });
+          const data = d.data();
+          const dueDate = data.dueDate.toDate();
+          
+          if (!active) {
+            // It's being saved as inactive, cancel all pending payments (even past ones)
+            if (data.status === 'PENDING' || data.status === 'PENDING_DATE') {
+              batch.update(d.ref, { 
+                concept: conceptData.name,
+                expectedAmount: amountCents,
+                status: 'CANCELED' 
+              });
+            } else if (dueDate >= now) {
+              // It's already canceled, just update name/amount
+              batch.update(d.ref, {
+                concept: conceptData.name,
+                expectedAmount: amountCents
+              });
+            }
+          } else {
+            // It's being saved as active
+            if (data.status === 'CANCELED' && dueDate >= now) {
+              // Restore it
+              const params = paramsFromConcept(initialConcept ? { ...initialConcept, ...conceptData } as Concept : conceptData as Concept);
+              const year = data.originalPeriodYear !== undefined ? data.originalPeriodYear : dueDate.getFullYear();
+              const month = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : dueDate.getMonth();
+              const { status } = computeDueDateAndStatus(year, month, params);
+              
+              batch.update(d.ref, {
+                concept: conceptData.name,
+                expectedAmount: amountCents,
+                status: status
+              });
+            } else if (dueDate >= now) {
+              // Just update name/amount
+              batch.update(d.ref, {
+                concept: conceptData.name,
+                expectedAmount: amountCents
+              });
+            }
           }
         });
       }

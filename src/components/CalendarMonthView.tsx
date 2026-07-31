@@ -49,13 +49,24 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
   // but the original period might be different if we implement it. Right now `dueDate` is all we have.
   // We'll place all payments whose `dueDate` falls in this month.
   payments.forEach(p => {
+    if (p.status === 'CANCELED') return;
     if (p.dueDate.getMonth() !== month || p.dueDate.getFullYear() !== year) return;
     
     const concept = concepts.find(c => c.id === p.conceptId);
     if (!concept) return;
 
     if (p.status === 'PENDING_DATE') {
-      outOfGrid_FechaPendiente.push(p);
+      if (concept.dateType === 'approximate') {
+        const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+        for (let d = targetDay - 1; d <= targetDay + 1; d++) {
+           if (d >= 1 && d <= daysInMonth) {
+             if (!gridPayments.has(d)) gridPayments.set(d, []);
+             gridPayments.get(d)!.push(p);
+           }
+        }
+      } else {
+        outOfGrid_FechaPendiente.push(p);
+      }
     } else if (concept.dateType === 'month_only') {
       outOfGrid_SinDia.push(p);
     } else {
@@ -160,6 +171,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                     if (p.status === 'OVERDUE') bgClass = "bg-red-100 text-red-800";
                     if (p.status === 'APPROX_OVERDUE') bgClass = "bg-orange-100 text-orange-800";
                     if (p.isDelayed) bgClass = "bg-blue-100 text-blue-800";
+                    if (isApprox && p.status === 'PENDING_DATE') bgClass = "bg-orange-50 text-orange-700 border border-orange-200 border-dashed";
 
                     return (
                       <button 
