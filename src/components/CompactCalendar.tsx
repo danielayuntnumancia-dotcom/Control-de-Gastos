@@ -8,9 +8,10 @@ interface CompactCalendarProps {
   currentYear: number;
   onNavigateToCalendar: () => void;
   onOpenPayment: (payment: Payment) => void;
+  onOpenDay?: (date: Date) => void;
 }
 
-export function CompactCalendar({ payments, concepts, currentMonth, currentYear, onNavigateToCalendar, onOpenPayment }: CompactCalendarProps) {
+export function CompactCalendar({ payments, concepts, currentMonth, currentYear, onNavigateToCalendar, onOpenPayment, onOpenDay }: CompactCalendarProps) {
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   
@@ -88,7 +89,7 @@ export function CompactCalendar({ payments, concepts, currentMonth, currentYear,
               <button 
                 key={day} 
                 className={`h-8 rounded flex items-center justify-center relative ${bgClass}`}
-                onClick={dayPayments.length > 0 ? () => dayPayments.length === 1 ? onOpenPayment(dayPayments[0]) : onNavigateToCalendar() : undefined}
+                onClick={() => onOpenDay ? onOpenDay(new Date(currentYear, currentMonth, day)) : dayPayments.length > 0 ? () => dayPayments.length === 1 ? onOpenPayment(dayPayments[0]) : onNavigateToCalendar() : undefined}
                 title={dayPayments.map(p => p.concept).join(', ')}
               >
                 <span className="text-xs">{day}</span>

@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Payment, Concept, UserSettings } from '../types';
 import { formatPaymentDate, MONTH_NAMES } from '../utils/formatUtils';
 import { CompactCalendar } from './CompactCalendar';
+import DailyPaymentsModal from './DailyPaymentsModal';
+import MonthPreviewModal from './MonthPreviewModal';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, calculateDiferenciaConfirmada, calculatePendientes, filterPaymentsByPeriod } from '../utils/paymentUtils';
 
 interface DashboardViewProps {
@@ -14,6 +16,9 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ payments, concepts, settings, onOpenPayment, onNavigateToCalendar, onNavigateToConcepts }: DashboardViewProps) {
+  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+  const [previewMonthDate, setPreviewMonthDate] = useState<{ month: number, year: number } | null>(null);
+
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -242,13 +247,17 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
             currentYear={currentYear}
             onNavigateToCalendar={onNavigateToCalendar}
             onOpenPayment={onOpenPayment}
+            onOpenDay={setSelectedDayDate}
           />
 
           {/* Resumen mes siguiente */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
             <div className="px-4 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
               <h2 className="font-semibold text-slate-800 text-sm">Avance {MONTH_NAMES[currentMonth === 11 ? 0 : currentMonth + 1]}</h2>
-              <button onClick={onNavigateToCalendar} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+              <button 
+                onClick={() => setPreviewMonthDate({ month: currentMonth === 11 ? 0 : currentMonth + 1, year: currentMonth === 11 ? currentYear + 1 : currentYear })} 
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+              >
                 Ver mes
               </button>
             </div>
@@ -267,7 +276,27 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
           </div>
         </div>
       </div>
-      
+
+      {selectedDayDate && (
+        <DailyPaymentsModal
+          initialDate={selectedDayDate}
+          payments={payments}
+          concepts={concepts}
+          onClose={() => setSelectedDayDate(null)}
+          onOpenPayment={onOpenPayment}
+        />
+      )}
+
+      {previewMonthDate && (
+        <MonthPreviewModal
+          initialMonth={previewMonthDate.month}
+          initialYear={previewMonthDate.year}
+          payments={payments}
+          concepts={concepts}
+          onClose={() => setPreviewMonthDate(null)}
+          onOpenPayment={onOpenPayment}
+        />
+      )}
     </div>
   );
 }
