@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { generateOccurrences } from '../utils/occurrenceEngine';
-import { MONTH_NAMES_SHORT } from '../utils/formatUtils';
+import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor } from '../utils/formatUtils';
 
 interface ConceptFormProps {
   user: User | null;
@@ -33,7 +33,14 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   const [category, setCategory] = useState<Concept['category']>(initialConcept?.category || 'Suscripción');
   const [description, setDescription] = useState(initialConcept?.description || '');
   const [amountStr, setAmountStr] = useState(initialConcept ? (initialConcept.expectedAmount / 100).toString() : '');
-  const [color, setColor] = useState(initialConcept?.color || '#315E87');
+  const [color, setColor] = useState(initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción'));
+
+  // Update color automatically when category changes, IF it hasn't been manually customized
+  useEffect(() => {
+    if (!initialConcept) {
+      setColor(getCategoryColor(category));
+    }
+  }, [category, initialConcept]);
 
   // Step 2 data
   const [periodicity, setPeriodicity] = useState<Concept['periodicity']>(initialConcept?.periodicity || 'monthly');
@@ -52,7 +59,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       category !== (initialConcept?.category || 'Suscripción') ||
       description !== (initialConcept?.description || '') ||
       amountStr !== (initialConcept ? (initialConcept.expectedAmount / 100).toString() : '') ||
-      color !== (initialConcept?.color || '#315E87') ||
+      color !== (initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción')) ||
       periodicity !== (initialConcept?.periodicity || 'monthly') ||
       dateType !== (initialConcept?.dateType || 'exact') ||
       day !== (initialConcept?.day ?? 1) ||

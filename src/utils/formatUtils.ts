@@ -38,3 +38,21 @@ export function formatPaymentDate(payment: Payment, concept?: Concept) {
     return `${day} de ${month}`;
   }
 }
+
+export function getCategoryColor(category: string): string {
+  switch (category) {
+    case 'Suscripción': return '#6366f1'; // Indigo 500
+    case 'Impuesto': return '#ef4444'; // Red 500
+    case 'Tasa': return '#f59e0b'; // Amber 500
+    case 'Seguro': return '#10b981'; // Emerald 500
+    case 'Otro': return '#64748b'; // Slate 500
+    default: return '#64748b';
+  }
+}
+
+export function getConceptColor(concept: { color?: string, category: string }): string {
+  if (!concept.color || concept.color.toUpperCase() === '#315E87') {
+    return getCategoryColor(concept.category);
+  }
+  return concept.color;
+}

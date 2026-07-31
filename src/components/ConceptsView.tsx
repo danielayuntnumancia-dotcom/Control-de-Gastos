@@ -4,6 +4,7 @@ import { doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, wher
 import { db } from '../lib/firebase';
 import { ConfirmDialog } from './ConfirmDialog';
 import { paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
+import { getConceptColor } from '../utils/formatUtils';
 import { useAuth } from '../context/AuthContext';
 
 interface ConceptsViewProps {
@@ -246,8 +247,8 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                     <tr key={concept.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => onSelect(concept)}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          {concept.color && (
-                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: concept.color }} />
+                          {getConceptColor(concept) && (
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getConceptColor(concept) }} />
                           )}
                           <div>
                             <div className="font-medium text-slate-900">{concept.name}</div>
@@ -305,8 +306,8 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                 <div key={concept.id} className="p-4 hover:bg-slate-50 cursor-pointer" onClick={() => onSelect(concept)}>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
-                      {concept.color && (
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: concept.color }} />
+                      {getConceptColor(concept) && (
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getConceptColor(concept) }} />
                       )}
                       <div>
                         <h3 className="font-medium text-slate-900">{concept.name}</h3>
