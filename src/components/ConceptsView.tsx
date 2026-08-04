@@ -4,7 +4,7 @@ import { doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, wher
 import { db } from '../lib/firebase';
 import { ConfirmDialog } from './ConfirmDialog';
 import { paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
-import { getConceptColor } from '../utils/formatUtils';
+import { getConceptColor, formatAmount } from '../utils/formatUtils';
 import { useAuth } from '../context/AuthContext';
 
 interface ConceptsViewProps {
@@ -19,6 +19,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
   const [sortBy, setSortBy] = useState<'name' | 'next_due' | 'amount'>('name');
+  const [viewType, setViewType] = useState<'expense' | 'income'>('expense');
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -50,6 +51,8 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
 
   const filteredConcepts = useMemo(() => {
     let result = concepts;
+
+    result = result.filter(c => (c.type || 'expense') === viewType);
 
     if (searchTerm) {
       result = result.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -180,7 +183,23 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Conceptos</h2>
+        <div className="flex items-center gap-6">
+          <h2 className="text-2xl font-bold text-slate-800">Conceptos</h2>
+          <div className="flex bg-slate-100 p-1 rounded-lg">
+            <button
+              onClick={() => { setViewType('expense'); setFilterCategory(''); }}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewType === 'expense' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Gastos
+            </button>
+            <button
+              onClick={() => { setViewType('income'); setFilterCategory(''); }}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewType === 'income' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Ingresos
+            </button>
+          </div>
+        </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
           <input 
@@ -196,11 +215,22 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
             className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white"
           >
             <option value="">Todas las categorías</option>
-            <option value="Suscripción">Suscripción</option>
-            <option value="Impuesto">Impuesto</option>
-            <option value="Tasa">Tasa</option>
-            <option value="Seguro">Seguro</option>
-            <option value="Otro">Otro</option>
+            {viewType === 'expense' ? (
+              <>
+                <option value="Suscripción">Suscripción</option>
+                <option value="Impuesto">Impuesto</option>
+                <option value="Tasa">Tasa</option>
+                <option value="Seguro">Seguro</option>
+                <option value="Otro">Otro</option>
+              </>
+            ) : (
+              <>
+                <option value="Salario">Salario</option>
+                <option value="Paga Extra">Paga Extra</option>
+                <option value="Ingreso Extra">Ingreso Extra</option>
+                <option value="Otro">Otro</option>
+              </>
+            )}
           </select>
           <select 
             value={filterStatus} 
@@ -265,7 +295,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                         {concept.periodicity === 'custom_months' && 'Meses Específicos'}
                       </td>
                       <td className="px-6 py-4 text-sm font-medium">
-                        {(concept.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                        {formatAmount(concept.expectedAmount, concept.type || 'expense', concept.amountType === 'approximate')}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-tight ${concept.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -315,7 +345,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-medium text-sm">{(concept.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                      <div className="font-medium text-sm">{formatAmount(concept.expectedAmount, concept.type || 'expense', concept.amountType === 'approximate')}</div>
                       <span className={`px-2 py-0.5 mt-1 inline-block rounded-full text-[10px] font-bold uppercase tracking-tight ${concept.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                         {concept.active ? 'Activo' : 'Inactivo'}
                       </span>

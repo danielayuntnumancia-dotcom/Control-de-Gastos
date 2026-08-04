@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Payment, Concept } from '../types';
-import { formatPaymentDate, MONTH_NAMES } from '../utils/formatUtils';
+import { formatPaymentDate, MONTH_NAMES, formatAmount } from '../utils/formatUtils';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
@@ -79,9 +79,10 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   else if (payment.status === 'PENDING_DATE') { statusClass = "text-orange-700 bg-orange-100"; statusText = "Falta fecha"; }
   else if (payment.status === 'CANCELED') { statusClass = "text-slate-500 bg-slate-200"; statusText = "Cancelado"; }
 
-  const expectedFormatted = (payment.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+  const expectedFormatted = formatAmount(payment.expectedAmount, payment.type || 'expense', isApprox);
   const currentActualFormatted = payment.actualAmount !== null ? (payment.actualAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : null;
   const currentDiferencia = payment.status === 'PAID' && payment.actualAmount !== null ? payment.actualAmount - payment.expectedAmount : null;
+  const isApprox = payment.isAmountApproximate || concept?.amountType === 'approximate';
 
   const handleUpdate = async (updates: Partial<Payment>, originalAction: ActionState) => {
     setActionState('saving');
@@ -234,14 +235,14 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 <h4 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Datos Económicos</h4>
                 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">Importe previsto</span>
+                  <span className="text-sm font-medium text-slate-600">{payment.type === 'income' ? 'Ingreso previsto' : 'Importe previsto'}</span>
                   <span className="text-lg font-bold text-slate-900">{expectedFormatted}</span>
                 </div>
 
                 {payment.status === 'PAID' && (
                   <>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-slate-600">Importe real cobrado</span>
+                      <span className="text-sm font-medium text-slate-600">{payment.type === 'income' ? 'Ingreso real' : 'Importe real pagado'}</span>
                       <span className="text-lg font-bold text-green-700">{currentActualFormatted || expectedFormatted}</span>
                     </div>
                     {currentDiferencia !== null && currentDiferencia !== 0 && (
@@ -280,11 +281,17 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
           {(actionState === 'pay' || actionState === 'correct') && (
             <div className="space-y-4">
               <h4 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">
-                {actionState === 'pay' ? 'Marcar como Pagado' : 'Corregir Pago'}
+                {actionState === 'pay' ? 'Marcar como Pagado/Cobrado' : 'Corregir Pago/Cobro'}
               </h4>
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Importe Real (€)</label>
+                {isApprox && actionState === 'pay' && (
+                  <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-800 flex items-start gap-2">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    <p>La cantidad prevista era aproximada. Por favor, asegúrate de introducir el importe exacto final.</p>
+                  </div>
+                )}
                 <input 
                   type="number" step="0.01" 
                   value={actualAmount} onChange={e => setActualAmount(e.target.value)}
@@ -404,7 +411,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
             <>
               {payment.status !== 'PAID' ? (
                 <button onClick={() => setActionState('pay')} className="w-full py-2.5 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-sm">
-                  Marcar como Pagado
+                  Marcar como Pagado/Cobrado
                 </button>
               ) : (
                 <button onClick={() => setActionState('correct')} className="w-full py-2.5 rounded-lg text-sm font-semibold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-colors shadow-sm">

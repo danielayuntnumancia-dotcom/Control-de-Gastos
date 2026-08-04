@@ -45,6 +45,9 @@ export function getCategoryColor(category: string): string {
     case 'Impuesto': return '#ef4444'; // Red 500
     case 'Tasa': return '#f59e0b'; // Amber 500
     case 'Seguro': return '#10b981'; // Emerald 500
+    case 'Salario': return '#22c55e'; // Green 500
+    case 'Paga Extra': return '#16a34a'; // Green 600
+    case 'Ingreso Extra': return '#4ade80'; // Green 400
     case 'Otro': return '#64748b'; // Slate 500
     default: return '#64748b';
   }
@@ -55,4 +58,12 @@ export function getConceptColor(concept: { color?: string, category: string }): 
     return getCategoryColor(concept.category);
   }
   return concept.color;
+}
+
+export function formatAmount(cents: number, type: 'expense' | 'income' = 'expense', isApproximate: boolean = false): string {
+  const value = cents / 100;
+  const formatted = value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+  const prefix = isApproximate ? '~' : '';
+  const sign = type === 'income' ? '+' : '-';
+  return `${prefix}${sign}${formatted}`;
 }

@@ -29,10 +29,12 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   }, []);
 
   // Step 1 data
+  const [type, setType] = useState<Concept['type']>(initialConcept?.type || 'expense');
   const [name, setName] = useState(initialConcept?.name || '');
-  const [category, setCategory] = useState<Concept['category']>(initialConcept?.category || 'Suscripción');
+  const [category, setCategory] = useState<Concept['category']>(initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : 'Suscripción'));
   const [description, setDescription] = useState(initialConcept?.description || '');
   const [amountStr, setAmountStr] = useState(initialConcept ? (initialConcept.expectedAmount / 100).toString() : '');
+  const [amountType, setAmountType] = useState<Concept['amountType']>(initialConcept?.amountType || 'exact');
   const [color, setColor] = useState(initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción'));
 
   // Update color automatically when category changes, IF it hasn't been manually customized
@@ -41,6 +43,12 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       setColor(getCategoryColor(category));
     }
   }, [category, initialConcept]);
+
+  useEffect(() => {
+    if (!initialConcept) {
+      setCategory(type === 'income' ? 'Salario' : 'Suscripción');
+    }
+  }, [type, initialConcept]);
 
   // Step 2 data
   const [periodicity, setPeriodicity] = useState<Concept['periodicity']>(initialConcept?.periodicity || 'monthly');
@@ -55,10 +63,12 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   // Determine if form is dirty
   const isDirty = useMemo(() => {
     return (
+      type !== (initialConcept?.type || 'expense') ||
       name !== (initialConcept?.name || '') ||
-      category !== (initialConcept?.category || 'Suscripción') ||
+      category !== (initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : 'Suscripción')) ||
       description !== (initialConcept?.description || '') ||
       amountStr !== (initialConcept ? (initialConcept.expectedAmount / 100).toString() : '') ||
+      amountType !== (initialConcept?.amountType || 'exact') ||
       color !== (initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción')) ||
       periodicity !== (initialConcept?.periodicity || 'monthly') ||
       dateType !== (initialConcept?.dateType || 'exact') ||
@@ -69,7 +79,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       active !== (initialConcept ? initialConcept.active : true) ||
       exceptionNoticeDays !== (initialConcept?.exceptionNoticeDays ?? '')
     );
-  }, [name, category, description, amountStr, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
+  }, [type, name, category, description, amountStr, amountType, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
 
   useUnsavedChangesWarning(isDirty && !isSubmitting);
 
@@ -122,7 +132,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     return occurrences.map(occ => ({
       conceptId: 'preview',
       concept: name,
+      type: type || 'expense',
       expectedAmount: amountCents,
+      isAmountApproximate: amountType === 'approximate',
       actualAmount: null,
       status: occ.status,
       dueDate: occ.dueDate,
@@ -162,9 +174,11 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         id: conceptRef.id,
         userId: user.uid,
         name: name.trim(),
+        type: type || 'expense',
         category,
         description,
         expectedAmount: amountCents,
+        amountType: amountType,
         color,
         periodicity,
         customMonths,
@@ -216,7 +230,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               userId: user.uid,
               conceptId: conceptRef.id,
               concept: conceptData.name,
+              type: conceptData.type,
               expectedAmount: amountCents,
+              isAmountApproximate: conceptData.amountType === 'approximate',
               actualAmount: null,
               status: active ? occ.status : 'CANCELED',
               dueDate: occ.dueDate,
@@ -247,14 +263,18 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
             if (data.status === 'PENDING' || data.status === 'PENDING_DATE') {
               batch.update(d.ref, { 
                 concept: conceptData.name,
+                type: conceptData.type,
                 expectedAmount: amountCents,
+                isAmountApproximate: conceptData.amountType === 'approximate',
                 status: 'CANCELED' 
               });
             } else if (dueDate >= now) {
               // It's already canceled, just update name/amount
               batch.update(d.ref, {
                 concept: conceptData.name,
-                expectedAmount: amountCents
+                type: conceptData.type,
+                expectedAmount: amountCents,
+                isAmountApproximate: conceptData.amountType === 'approximate'
               });
             }
           } else {
@@ -268,14 +288,18 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               
               batch.update(d.ref, {
                 concept: conceptData.name,
+                type: conceptData.type,
                 expectedAmount: amountCents,
+                isAmountApproximate: conceptData.amountType === 'approximate',
                 status: status
               });
             } else if (dueDate >= now) {
               // Just update name/amount
               batch.update(d.ref, {
                 concept: conceptData.name,
-                expectedAmount: amountCents
+                type: conceptData.type,
+                expectedAmount: amountCents,
+                isAmountApproximate: conceptData.amountType === 'approximate'
               });
             }
           }
@@ -308,6 +332,23 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         <div className="p-6 overflow-y-auto flex-1">
           {step === 1 ? (
             <form id="step1" onSubmit={handleNext} className="space-y-5">
+              <div className="flex bg-slate-100 p-1 rounded-lg mb-6 w-full">
+                <button
+                  type="button"
+                  onClick={() => setType('expense')}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${type === 'expense' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Gasto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType('income')}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${type === 'income' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Ingreso
+                </button>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
                 <input 
@@ -328,11 +369,22 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                     onChange={e => setCategory(e.target.value as Concept['category'])}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                   >
+                    {type === 'expense' ? (
+                      <>
                     <option value="Suscripción">Suscripción</option>
                     <option value="Impuesto">Impuesto</option>
                     <option value="Tasa">Tasa</option>
                     <option value="Seguro">Seguro</option>
                     <option value="Otro">Otro</option>
+                      </>
+                    ) : (
+                      <>
+                    <option value="Salario">Salario</option>
+                    <option value="Paga Extra">Paga Extra</option>
+                    <option value="Ingreso Extra">Ingreso Extra</option>
+                    <option value="Otro">Otro</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -491,7 +543,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                             }
                           </span>
                           <div className="flex items-center gap-3">
-                            <span className="font-medium">{(occ.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                            <span className={`font-medium ${(occ as any).type === 'income' ? 'text-green-600' : 'text-slate-800'}`}>
+                              {(occ as any).isAmountApproximate ? '~' : ''}{(occ as any).type === 'income' ? '+' : '-'}{(occ.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                            </span>
                             {occ.status === 'PENDING_DATE' && (
                               <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">DÍA INVÁLIDO</span>
                             )}

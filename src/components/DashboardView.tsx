@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Payment, Concept, UserSettings } from '../types';
-import { formatPaymentDate, MONTH_NAMES } from '../utils/formatUtils';
+import { formatPaymentDate, MONTH_NAMES, formatAmount } from '../utils/formatUtils';
 import { CompactCalendar } from './CompactCalendar';
 import DailyPaymentsModal from './DailyPaymentsModal';
 import MonthPreviewModal from './MonthPreviewModal';
@@ -39,16 +39,16 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   }, [concepts]);
 
   // 5.1 Total Previsto (excludes cancelled)
-  const totalPrevisto = calculateTotalPrevisto(currentMonthPayments);
+  const previstoInfo = calculateTotalPrevisto(currentMonthPayments);
 
   // 5.2 Total pagado real (only PAID, from current month period)
-  const pagadoReal = calculateTotalPagadoReal(currentMonthPayments);
+  const pagadoInfo = calculateTotalPagadoReal(currentMonthPayments);
 
   // 5.3 Diferencia confirmada (actual - expected) ONLY on PAID
   const diferencia = calculateDiferenciaConfirmada(currentMonthPayments);
 
   // 5.4 Pendientes (Count and sum of expectedAmount for pending)
-  const { total: totalPendiente, count: countPendiente } = calculatePendientes(currentMonthPayments);
+  const pendienteInfo = calculatePendientes(currentMonthPayments);
 
   // 6. Próximos Pagos
   // Pending of current month, expired, approx dates, first of next month
@@ -146,37 +146,45 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             
             <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Total Previsto</p>
-              <p className="text-lg md:text-2xl font-bold text-slate-900">
-                {totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Balance Previsto</p>
+              <p className={`text-lg md:text-2xl font-bold ${previstoInfo.net >= 0 ? 'text-green-600' : 'text-slate-900'}`}>
+                {previstoInfo.net > 0 ? '+' : ''}{previstoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
               </p>
+              <div className="text-[10px] text-slate-400 mt-1 space-y-0.5">
+                <p>Ingresos: {previstoInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                <p>Gastos: {previstoInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+              </div>
             </div>
             
             <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Pagado Real</p>
-              <p className="text-lg md:text-2xl font-bold text-slate-900">
-                {pagadoReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Balance Real</p>
+              <p className={`text-lg md:text-2xl font-bold ${pagadoInfo.net >= 0 ? 'text-green-600' : 'text-slate-900'}`}>
+                {pagadoInfo.net > 0 ? '+' : ''}{pagadoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
               </p>
+              <div className="text-[10px] text-slate-400 mt-1 space-y-0.5">
+                <p>Ingresos: {pagadoInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                <p>Gastos: {pagadoInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+              </div>
             </div>
 
             <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
               <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">
-                Diferencia
+                Desviación
               </p>
               <p className={`text-lg md:text-2xl font-bold ${diferencia === 0 ? 'text-slate-600' : diferencia > 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {Math.abs(diferencia).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
               </p>
-              <p className="text-xs text-slate-400 mt-1">
-                {diferencia === 0 ? 'Sin diferencia' : diferencia > 0 ? 'Sobrecoste' : 'A favor'}
+              <p className="text-[10px] text-slate-400 mt-1">
+                {diferencia === 0 ? 'Sin diferencia' : diferencia > 0 ? 'Has perdido dinero (sobrecoste / menos ingresos)' : 'Has ganado dinero (ahorro / más ingresos)'}
               </p>
             </div>
 
             <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Pendiente</p>
+              <p className="text-[10px] md:text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Pendiente (Gastos)</p>
               <p className="text-lg md:text-2xl font-bold text-orange-500">
-                {totalPendiente.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                {pendienteInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
               </p>
-              <p className="text-xs text-slate-400 mt-1">{countPendiente} cobros</p>
+              <p className="text-[10px] text-slate-400 mt-1">{pendienteInfo.count} movimientos pdtes</p>
             </div>
 
           </div>
@@ -226,7 +234,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-slate-900">
-                        {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                        {formatAmount(p.expectedAmount, p.type || 'expense', p.isAmountApproximate)}
                       </p>
                       {concept?.category && (
                         <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">{concept.category}</p>
@@ -265,7 +273,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
               {nextMonthPayments.length > 0 ? (
                 <>
                   <p className="text-3xl font-bold text-slate-800">
-                    {(calculateTotalPrevisto(nextMonthPayments)).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    {(calculateTotalPrevisto(nextMonthPayments).net).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
                   </p>
                   <p className="text-sm text-slate-500 mt-2">Previsto en {nextMonthPayments.filter(p => p.status !== 'CANCELED').length} cobros</p>
                 </>

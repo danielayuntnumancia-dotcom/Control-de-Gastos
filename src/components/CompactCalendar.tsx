@@ -1,5 +1,6 @@
 import React from 'react';
 import { Payment, Concept } from '../types';
+import { formatAmount } from '../utils/formatUtils';
 
 interface CompactCalendarProps {
   payments: Payment[];
@@ -116,7 +117,7 @@ export function CompactCalendar({ payments, concepts, currentMonth, currentYear,
                 >
                   <span className="text-slate-700 truncate mr-2">{p.concept}</span>
                   <span className="font-medium text-slate-900 shrink-0">
-                    {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    {formatAmount(p.expectedAmount, p.type || 'expense', false)}
                   </span>
                 </button>
               ))}

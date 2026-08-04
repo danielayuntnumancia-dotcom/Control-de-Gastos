@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Payment, Concept } from '../types';
-import { formatPaymentDate, MONTH_NAMES_SHORT, MONTH_NAMES } from '../utils/formatUtils';
+import { formatPaymentDate, MONTH_NAMES_SHORT, MONTH_NAMES, formatAmount } from '../utils/formatUtils';
 
 interface DailyPaymentsModalProps {
   initialDate: Date;
@@ -156,7 +156,7 @@ export default function DailyPaymentsModal({ initialDate, payments, concepts, on
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-slate-900 text-lg">
-                          {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                          {formatAmount(p.expectedAmount, p.type || 'expense', p.isAmountApproximate)}
                         </p>
                         {concept?.category && (
                           <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">{concept.category}</p>

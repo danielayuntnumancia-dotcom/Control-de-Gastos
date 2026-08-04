@@ -2,9 +2,11 @@ export interface Concept {
   id: string;
   userId: string;
   name: string;
-  category: 'Suscripción' | 'Impuesto' | 'Tasa' | 'Seguro' | 'Otro';
+  type?: 'expense' | 'income';
+  category: 'Suscripción' | 'Impuesto' | 'Tasa' | 'Seguro' | 'Salario' | 'Paga Extra' | 'Ingreso Extra' | 'Otro';
   description?: string;
   expectedAmount: number; // in cents
+  amountType?: 'exact' | 'approximate';
   color?: string;
   periodicity: 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'custom_months' | 'one_time';
   customMonths?: number[];
@@ -22,11 +24,13 @@ export interface Payment {
   userId: string;
   conceptId?: string; // Links to a Concept
   concept: string; // Stored here for fast access and history
+  type?: 'expense' | 'income';
   description?: string;
   dueDate: Date; // Effective Date
   originalPeriodMonth?: number; // 0-11
   originalPeriodYear?: number;
   expectedAmount: number; // in cents
+  isAmountApproximate?: boolean;
   actualAmount: number | null;
   actualDate?: Date; // Fecha real de pago
   isDelayed?: boolean;

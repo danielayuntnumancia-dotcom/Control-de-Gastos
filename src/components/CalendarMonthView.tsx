@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Payment, Concept } from '../types';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, calculatePendientes, filterPaymentsByPeriod } from '../utils/paymentUtils';
+import { formatAmount } from '../utils/formatUtils';
 
 interface CalendarMonthViewProps {
   payments: Payment[];
@@ -21,9 +22,10 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
   // Use filterPaymentsByPeriod to correctly calculate original month logic
   const currentPeriodPayments = filterPaymentsByPeriod(payments, month, year);
 
-  const totalPrevisto = calculateTotalPrevisto(currentPeriodPayments);
-  const totalReal = calculateTotalPagadoReal(currentPeriodPayments);
-  const { count: countPendientes } = calculatePendientes(currentPeriodPayments);
+  const previstoInfo = calculateTotalPrevisto(currentPeriodPayments);
+  const pagadoInfo = calculateTotalPagadoReal(currentPeriodPayments);
+  const pendienteInfo = calculatePendientes(currentPeriodPayments);
+  const countPendientes = pendienteInfo.count;
 
   // 2. Grid logic
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -99,15 +101,15 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
 
         <div className="flex items-center gap-6">
           <div className="text-right">
-            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Previsto</p>
-            <p className="font-bold text-slate-800">
-              {totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Balance Previsto</p>
+            <p className={`font-bold ${previstoInfo.net >= 0 ? 'text-green-600' : 'text-slate-800'}`}>
+              {previstoInfo.net > 0 ? '+' : ''}{previstoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Pagado</p>
-            <p className="font-bold text-green-600">
-              {totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Balance Real</p>
+            <p className={`font-bold ${pagadoInfo.net >= 0 ? 'text-green-600' : 'text-slate-800'}`}>
+              {pagadoInfo.net > 0 ? '+' : ''}{pagadoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
             </p>
           </div>
           <div className="text-right hidden sm:block">
@@ -167,7 +169,8 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                     const isApprox = concept?.dateType === 'approximate';
                     
                     let bgClass = "bg-slate-100 text-slate-700";
-                    if (p.status === 'PAID') bgClass = "bg-green-100 text-green-800";
+                    if (p.type === 'income') bgClass = "bg-emerald-100 text-emerald-800";
+                    if (p.status === 'PAID') bgClass = p.type === 'income' ? "bg-green-200 text-green-900 border border-green-300" : "bg-green-100 text-green-800";
                     if (p.status === 'OVERDUE') bgClass = "bg-red-100 text-red-800";
                     if (p.status === 'APPROX_OVERDUE') bgClass = "bg-orange-100 text-orange-800";
                     if (p.isDelayed) bgClass = "bg-blue-100 text-blue-800";
@@ -178,14 +181,14 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                         key={p.id}
                         onClick={() => onOpenPayment(p)}
                         className={`text-left px-1.5 py-1 rounded text-[10px] sm:text-xs truncate transition-colors hover:brightness-95 ${bgClass}`}
-                        title={`${p.concept} - ${(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`}
+                        title={`${p.concept} - ${formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}`}
                       >
                         <span className="font-semibold block truncate">
                           {isApprox && <span className="font-normal opacity-80 mr-1">Aprox.</span>}
                           {p.concept}
                         </span>
                         <span className="block opacity-80">
-                          {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                          {formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}
                         </span>
                       </button>
                     );
@@ -218,7 +221,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                   className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors"
                 >
                   <span className="font-medium text-slate-700">{p.concept}</span>
-                  <span className="font-semibold text-slate-900">{(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                  <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}</span>
                 </button>
               ))}
             </div>
@@ -238,7 +241,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                   className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors border border-orange-100"
                 >
                   <span className="font-medium text-slate-700">{p.concept}</span>
-                  <span className="font-semibold text-slate-900">{(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                  <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}</span>
                 </button>
               ))}
             </div>
