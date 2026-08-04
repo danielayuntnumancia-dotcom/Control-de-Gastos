@@ -26,8 +26,8 @@ export function AnnualBreakdowns({ payments, concepts, onOpenPayment }: AnnualBr
     });
     return Array.from(cats.entries()).map(([name, ps]) => ({
       name,
-      previsto: calculateTotalPrevisto(ps),
-      real: calculateTotalPagadoReal(ps),
+      previsto: calculateTotalPrevisto(ps).net,
+      real: calculateTotalPagadoReal(ps).net,
       diff: calculateDiferenciaConfirmada(ps),
       pendientes: ps.filter(p => PENDING_STATUSES.includes(p.status)).length,
       pagados: ps.filter(p => p.status === 'PAID').length,
@@ -45,8 +45,8 @@ export function AnnualBreakdowns({ payments, concepts, onOpenPayment }: AnnualBr
     });
     return Array.from(stats.entries()).map(([name, ps]) => ({
       name,
-      previsto: calculateTotalPrevisto(ps),
-      real: calculateTotalPagadoReal(ps),
+      previsto: calculateTotalPrevisto(ps).net,
+      real: calculateTotalPagadoReal(ps).net,
       total: ps.length
     })).sort((a, b) => b.total - a.total);
   }, [payments]);

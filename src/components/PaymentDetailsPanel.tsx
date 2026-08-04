@@ -79,10 +79,24 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   else if (payment.status === 'PENDING_DATE') { statusClass = "text-orange-700 bg-orange-100"; statusText = "Falta fecha"; }
   else if (payment.status === 'CANCELED') { statusClass = "text-slate-500 bg-slate-200"; statusText = "Cancelado"; }
 
+  const isApprox = payment.isAmountApproximate || concept?.amountType === 'approximate';
   const expectedFormatted = formatAmount(payment.expectedAmount, payment.type || 'expense', isApprox);
   const currentActualFormatted = payment.actualAmount !== null ? (payment.actualAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : null;
   const currentDiferencia = payment.status === 'PAID' && payment.actualAmount !== null ? payment.actualAmount - payment.expectedAmount : null;
-  const isApprox = payment.isAmountApproximate || concept?.amountType === 'approximate';
+
+  const proposedDates: Date[] = [];
+  if (concept?.dateType === 'approximate') {
+    const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+    const y = payment.dueDate.getFullYear();
+    const m = payment.dueDate.getMonth();
+    const d1 = new Date(y, m, targetDay - 1);
+    const d2 = new Date(y, m, targetDay + 1);
+    const curr = new Date(d1);
+    while (curr <= d2) {
+      proposedDates.push(new Date(curr));
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
 
   const handleUpdate = async (updates: Partial<Payment>, originalAction: ActionState) => {
     setActionState('saving');
@@ -107,10 +121,12 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       setErrorMessage("Importe inválido"); return;
     }
     const [y, m, d] = actualDate.split('-').map(Number);
+    const updatedDate = new Date(y, m - 1, d);
     handleUpdate({
       status: 'PAID',
       actualAmount: Math.round(amt * 100),
-      actualDate: new Date(y, m - 1, d),
+      actualDate: updatedDate,
+      dueDate: updatedDate,
       description: description.trim()
     }, actionState);
   };
@@ -314,6 +330,29 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Fecha de pago real</label>
+                {proposedDates.length > 0 && (
+                  <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                    {proposedDates.map(d => {
+                      // Usar formato YYYY-MM-DD correcto localmente
+                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                      const isSelected = actualDate === dateStr;
+                      return (
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => setActualDate(dateStr)}
+                          className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            isSelected 
+                              ? 'bg-indigo-600 text-white border-indigo-600' 
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                          }`}
+                        >
+                          Día {d.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <input 
                   type="date"
                   value={actualDate} onChange={e => setActualDate(e.target.value)}
@@ -338,6 +377,36 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
               
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nueva fecha efectiva</label>
+                {proposedDates.length > 0 && (
+                  <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                    {proposedDates.map(d => {
+                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                      const isSelected = effectiveDate === dateStr;
+                      return (
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => {
+                            setEffectiveDate(dateStr);
+                            const [yy, mm, dd] = dateStr.split('-').map(Number);
+                            if (mm - 1 !== originalMonth || yy !== originalYear) {
+                              setDelayedMark(true);
+                            } else {
+                              setDelayedMark(false);
+                            }
+                          }}
+                          className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            isSelected 
+                              ? 'bg-indigo-600 text-white border-indigo-600' 
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                          }`}
+                        >
+                          Día {d.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <input 
                   type="date"
                   value={effectiveDate} onChange={e => {

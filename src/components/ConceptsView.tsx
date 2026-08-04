@@ -82,7 +82,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
     });
 
     return result;
-  }, [concepts, searchTerm, filterCategory, filterStatus, sortBy]);
+  }, [concepts, searchTerm, filterCategory, filterStatus, sortBy, viewType]);
 
   const handleToggleStatus = (concept: Concept) => {
     const doUpdate = async () => {
@@ -161,18 +161,30 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
       `¿Eliminar definitivamente el concepto "${concept.name}"? Solo usar si fue creado por error.`,
       async () => {
         try {
-          // Find payments with this concept ID
-          const q = query(collection(db, 'payments'), where('conceptId', '==', concept.id));
+          const q = query(collection(db, 'payments'), where('userId', '==', user.uid), where('conceptId', '==', concept.id));
           const snap = await getDocs(q);
           
-          if (!snap.empty) {
-            alert("No se puede eliminar un concepto que ya tiene pagos registrados (historial real). Por favor, desactívalo en su lugar.");
+          const hasHistorical = snap.docs.some(d => {
+            const data = d.data();
+            const st = data.status;
+            return st === 'PAID' || st === 'CANCELED' || data.isDelayed;
+          });
+
+          if (hasHistorical) {
+            alert("No se puede eliminar un concepto que ya tiene pagos históricos registrados. Por favor, desactívalo en su lugar.");
             return;
           }
 
-          await deleteDoc(doc(db, 'concepts', concept.id));
-        } catch (e: unknown) {
+          const batch = writeBatch(db);
+          snap.docs.forEach(d => {
+            batch.delete(d.ref);
+          });
+          batch.delete(doc(db, 'concepts', concept.id));
+          
+          await batch.commit();
+        } catch (e: any) {
           console.error(e);
+          alert("Error al eliminar el concepto: " + e.message);
         }
       },
       true,

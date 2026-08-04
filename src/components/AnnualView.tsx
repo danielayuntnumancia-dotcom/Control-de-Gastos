@@ -32,10 +32,13 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
 
   const thisYearPayments = filterPaymentsByYear(payments, globalYear);
   
-  const totalPrevisto = calculateTotalPrevisto(thisYearPayments);
-  const totalRealPagado = calculateTotalPagadoReal(thisYearPayments);
+  const previstoGlobal = calculateTotalPrevisto(thisYearPayments);
+  const realGlobal = calculateTotalPagadoReal(thisYearPayments);
+  const totalPrevisto = previstoGlobal.net;
+  const totalRealPagado = realGlobal.net;
   const diferenciaConfirmada = calculateDiferenciaConfirmada(thisYearPayments);
-  const { total: totalPendiente, count: countPendientes } = calculatePendientes(thisYearPayments);
+  const pendientesGlobal = calculatePendientes(thisYearPayments);
+  const countPendientes = pendientesGlobal.count;
   
   const countPagados = thisYearPayments.filter(p => p.status === 'PAID').length;
   const countCancelados = thisYearPayments.filter(p => p.status === 'CANCELED').length;
@@ -43,10 +46,16 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
   const chartData = useMemo(() => {
     return MONTH_NAMES_SHORT.map((monthName, index) => {
       const monthPayments = thisYearPayments.filter(p => p.originalPeriodMonth === index);
+      const prev = calculateTotalPrevisto(monthPayments);
+      const real = calculateTotalPagadoReal(monthPayments);
       return {
         name: monthName,
-        Previsto: calculateTotalPrevisto(monthPayments),
-        Real: calculateTotalPagadoReal(monthPayments),
+        Previsto: prev.net,
+        Real: real.net,
+        IngresosPrev: prev.incomes,
+        GastosPrev: prev.expenses,
+        IngresosReal: real.incomes,
+        GastosReal: real.expenses,
         monthIndex: index
       };
     });
@@ -60,16 +69,16 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
       
       const row: any = {
         concept: c,
-        totalPrevisto: calculateTotalPrevisto(conceptPayments),
-        totalReal: calculateTotalPagadoReal(conceptPayments),
+        totalPrevisto: calculateTotalPrevisto(conceptPayments).net,
+        totalReal: calculateTotalPagadoReal(conceptPayments).net,
         months: {}
       };
 
       for (let i = 0; i < 12; i++) {
         const p = conceptPayments.filter(p => p.originalPeriodMonth === i);
         row.months[i] = {
-          previsto: calculateTotalPrevisto(p),
-          real: calculateTotalPagadoReal(p),
+          previsto: calculateTotalPrevisto(p).net,
+          real: calculateTotalPagadoReal(p).net,
           payments: p
         };
       }
@@ -142,34 +151,66 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Previsto</span>
-              <span className="text-xl md:text-2xl font-bold text-slate-900">{totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Real Pagado</span>
-              <span className="text-xl md:text-2xl font-bold text-green-700">{totalRealPagado.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Diferencia Confirmada</span>
-                <span className={`text-xl md:text-2xl font-bold ${diferenciaConfirmada > 0 ? 'text-red-600' : diferenciaConfirmada < 0 ? 'text-green-600' : 'text-slate-700'}`}>
-                  {diferenciaConfirmada > 0 ? '+' : ''}{diferenciaConfirmada.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* INGRESOS */}
+            <div className="bg-white rounded-xl border border-emerald-100 shadow-sm p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">arrow_upward</span> Ingresos del Año
+                </h3>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium mt-1">
-                {diferenciaConfirmada > 0 ? 'Sobrecoste' : diferenciaConfirmada < 0 ? 'Ahorro / Abono' : 'Coincide con previsto'}
-              </span>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Pdte. Económico</span>
-                <span className="text-xl md:text-2xl font-bold text-orange-600">{totalPendiente.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+              <div className="space-y-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+                  <span className="text-xl font-bold text-emerald-600">{realGlobal.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
+                <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+                  <span className="text-[10px] text-slate-400">PREVISTO</span>
+                  <span className="text-xs font-semibold text-slate-600">{previstoGlobal.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium mt-1">
-                {countPendientes} recibos pendientes
-              </span>
+            </div>
+
+            {/* GASTOS */}
+            <div className="bg-white rounded-xl border border-red-100 shadow-sm p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">arrow_downward</span> Gastos del Año
+                </h3>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+                  <span className="text-xl font-bold text-red-600">{realGlobal.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
+                <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+                  <span className="text-[10px] text-slate-400">PREVISTO</span>
+                  <span className="text-xs font-semibold text-slate-600">{previstoGlobal.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* NETO */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">account_balance</span> Balance Neto
+                </h3>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+                  <span className={`text-xl font-bold ${realGlobal.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {realGlobal.net > 0 ? '+' : ''}{realGlobal.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+                  <span className="text-[10px] text-slate-400">PREVISTO</span>
+                  <span className={`text-xs font-semibold ${previstoGlobal.net >= 0 ? 'text-slate-700' : 'text-red-500'}`}>
+                    {previstoGlobal.net > 0 ? '+' : ''}{previstoGlobal.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -209,8 +250,8 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                   <ReferenceLine y={0} stroke="#cbd5e1" />
-                  <Bar dataKey="Previsto" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="Real" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="IngresosReal" name="Ingresos (Real)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="GastosReal" name="Gastos (Real)" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -338,8 +379,8 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
               if (monthPayments.length === 0) return null;
               
               const isExpanded = expandedMonth === index;
-              const mPrevisto = calculateTotalPrevisto(monthPayments);
-              const mReal = calculateTotalPagadoReal(monthPayments);
+              const mPrevInfo = calculateTotalPrevisto(monthPayments);
+              const mRealInfo = calculateTotalPagadoReal(monthPayments);
               const mPendientes = monthPayments.filter(p => PENDING_STATUSES.includes(p.status)).length;
 
               return (
@@ -353,9 +394,14 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                       <span className="block text-xs text-slate-500">{monthPayments.length} recibos • {mPendientes} pdtes.</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <span className="block text-xs font-bold text-slate-900">{mPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} (P)</span>
-                        <span className="block text-xs font-bold text-green-700">{mReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} (R)</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="text-emerald-600 font-bold flex items-center"><span className="material-symbols-outlined text-[10px]">arrow_upward</span> {mRealInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                          <span className="text-red-600 font-bold flex items-center"><span className="material-symbols-outlined text-[10px]">arrow_downward</span> {mRealInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                        </div>
+                        <span className={`block text-sm font-bold ${mRealInfo.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                          {mRealInfo.net > 0 ? '+' : ''}{mRealInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                        </span>
                       </div>
                       <span className={`material-symbols-outlined text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
                     </div>

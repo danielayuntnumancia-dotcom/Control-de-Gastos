@@ -33,7 +33,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
   const startDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; // Mon = 0
   
   const daysInPrevMonth = new Date(year, month, 0).getDate();
-  const totalGridCells = Math.ceil((startDay + daysInMonth) / 7) * 7; // Stable weeks
+  const totalGridCells = 42; // Always 6 rows to prevent height jumping
 
   const today = new Date();
   const isActualMonth = today.getMonth() === month && today.getFullYear() === year;
@@ -59,7 +59,8 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
 
     if (p.status === 'PENDING_DATE') {
       if (concept.dateType === 'approximate') {
-        const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+        let targetDay = concept.day && concept.day > 0 ? concept.day : 1;
+        if (targetDay > daysInMonth) targetDay = daysInMonth;
         for (let d = targetDay - 1; d <= targetDay + 1; d++) {
            if (d >= 1 && d <= daysInMonth) {
              if (!gridPayments.has(d)) gridPayments.set(d, []);
@@ -83,7 +84,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
       {/* Month Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <h2 className="text-2xl font-bold text-slate-800 capitalize">
+          <h2 className="text-2xl font-bold text-slate-800 capitalize w-48 sm:w-56">
             {monthNames[month]} {year}
           </h2>
           <div className="flex bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
@@ -98,23 +99,73 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
             </button>
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Balance Previsto</p>
-            <p className={`font-bold ${previstoInfo.net >= 0 ? 'text-green-600' : 'text-slate-800'}`}>
-              {previstoInfo.net > 0 ? '+' : ''}{previstoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-            </p>
+      {/* Balances Trilogy */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* INGRESOS */}
+        <div className="bg-white rounded-xl border border-emerald-100 shadow-sm p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">arrow_upward</span> Ingresos
+            </h3>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Balance Real</p>
-            <p className={`font-bold ${pagadoInfo.net >= 0 ? 'text-green-600' : 'text-slate-800'}`}>
-              {pagadoInfo.net > 0 ? '+' : ''}{pagadoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-            </p>
+          <div className="space-y-1">
+            <div className="flex justify-between items-end">
+              <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+              <span className="text-lg font-bold text-emerald-600">{pagadoInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
+            <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+              <span className="text-[10px] text-slate-400">PREVISTO</span>
+              <span className="text-xs font-semibold text-slate-600">{previstoInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
           </div>
-          <div className="text-right hidden sm:block">
-            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Pendientes</p>
-            <p className="font-bold text-orange-500">{countPendientes}</p>
+        </div>
+
+        {/* GASTOS */}
+        <div className="bg-white rounded-xl border border-red-100 shadow-sm p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">arrow_downward</span> Gastos
+            </h3>
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between items-end">
+              <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+              <span className="text-lg font-bold text-red-600">{pagadoInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
+            <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+              <span className="text-[10px] text-slate-400">PREVISTO</span>
+              <span className="text-xs font-semibold text-slate-600">{previstoInfo.expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* NETO */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">account_balance</span> Balance Neto
+            </h3>
+            {countPendientes > 0 && (
+              <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold" title="Pagos pendientes">
+                {countPendientes} pend.
+              </span>
+            )}
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between items-end">
+              <span className="text-[10px] text-slate-500 font-medium">REAL</span>
+              <span className={`text-lg font-bold ${pagadoInfo.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {pagadoInfo.net > 0 ? '+' : ''}{pagadoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              </span>
+            </div>
+            <div className="flex justify-between items-end border-t border-slate-50 pt-1">
+              <span className="text-[10px] text-slate-400">PREVISTO</span>
+              <span className={`text-xs font-semibold ${previstoInfo.net >= 0 ? 'text-slate-700' : 'text-red-500'}`}>
+                {previstoInfo.net > 0 ? '+' : ''}{previstoInfo.net.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              </span>
+            </div>
           </div>
         </div>
       </div>

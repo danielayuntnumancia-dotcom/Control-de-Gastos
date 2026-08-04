@@ -81,10 +81,7 @@ function shouldGenerateForPeriod(
  * Regla para días inválidos (ej: 31 de febrero):
  *   new Date(year, month, 31) desborda a marzo. Detectamos esto comparando
  *   el mes resultante con el mes objetivo → si difieren, el día no existe →
- *   status = 'PENDING_DATE', dueDate = 1 del mes objetivo.
- *
- * Nunca trasladamos al último día del mes: el estado PENDING_DATE es suficiente
- * para indicar que la fecha exacta está pendiente de resolución.
+ *   status = 'PENDING_DATE', dueDate = último día del mes objetivo (ej: 28 de feb).
  */
 export function computeDueDateAndStatus(
   year: number,
@@ -105,7 +102,7 @@ export function computeDueDateAndStatus(
     const candidate = new Date(year, month, targetDay);
     // Si el día desborda (ej: 31 de feb), status = PENDING_DATE
     if (candidate.getMonth() !== month) {
-      return { dueDate: new Date(year, month, 1), status: 'PENDING_DATE' };
+      return { dueDate: new Date(year, month + 1, 0), status: 'PENDING_DATE' };
     }
     return { dueDate: candidate, status: 'PENDING_DATE' };
   }
@@ -114,8 +111,8 @@ export function computeDueDateAndStatus(
   const targetDay = day != null && day > 0 ? day : 1;
   const candidate = new Date(year, month, targetDay);
   if (candidate.getMonth() !== month) {
-    // Día inválido para este mes
-    return { dueDate: new Date(year, month, 1), status: 'PENDING_DATE' };
+    // Día inválido para este mes, ajustamos al último día del mes
+    return { dueDate: new Date(year, month + 1, 0), status: 'PENDING' };
   }
   return { dueDate: candidate, status: 'PENDING' };
 }

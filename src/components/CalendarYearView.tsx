@@ -49,7 +49,7 @@ export function CalendarYearView({ payments, concepts, year, onPrevYear, onNextY
         {Array.from({ length: 12 }).map((_, mIndex) => {
           const monthPayments = filterPaymentsByPeriod(payments, mIndex, year);
           
-          const totalPrevisto = calculateTotalPrevisto(monthPayments);
+          const totalPrevisto = calculateTotalPrevisto(monthPayments).net;
           const { count: pendingCount } = calculatePendientes(monthPayments);
           const nonCanceledCount = monthPayments.filter(p => p.status !== 'CANCELED').length;
 

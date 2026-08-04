@@ -33,8 +33,8 @@ export function ConceptDetailsView({ concept, payments, user, settings, onBack, 
     });
   }, [payments, concept.id]);
 
-  const totalPrevisto = calculateTotalPrevisto(conceptPayments);
-  const totalReal = calculateTotalPagadoReal(conceptPayments);
+  const totalPrevisto = calculateTotalPrevisto(conceptPayments).net;
+  const totalReal = calculateTotalPagadoReal(conceptPayments).net;
   const countPagados = conceptPayments.filter(p => p.status === 'PAID').length;
   const countPendientes = conceptPayments.filter(p => PENDING_STATUSES.includes(p.status)).length;
 
