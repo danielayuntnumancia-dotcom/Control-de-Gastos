@@ -84,6 +84,9 @@ export async function generateTemplateBlob(): Promise<Blob> {
   // Header style
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+  
+  // Note for Custom Months
+  ws.getCell('J1').note = 'Escribe los meses separados por coma. Ejemplo: Enero, Marzo, Julio';
 
   // Add 500 empty rows with data validation
   for (let i = 2; i <= 501; i++) {

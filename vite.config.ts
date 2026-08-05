@@ -12,6 +12,10 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5242880, // 5 MiB
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+        },
         manifest: {
           name: 'Control Anual de Pagos',
           short_name: 'Control Pagos',
