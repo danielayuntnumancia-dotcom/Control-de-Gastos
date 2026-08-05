@@ -13,16 +13,24 @@ export function ImportView() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDownloadTemplate = () => {
-    const blob = generateTemplateBlob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_importacion.xlsx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownloadTemplate = async () => {
+    setIsProcessing(true);
+    try {
+      const blob = await generateTemplateBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'plantilla_importacion.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setErrorMessage("Error al generar la plantilla.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const processFile = async (selectedFile: File) => {

@@ -62,29 +62,80 @@ const MONTHS_MAP: Record<string, number> = {
   'octubre': 9, '10': 9, 'noviembre': 10, '11': 10, 'diciembre': 11, '12': 11
 };
 
-export function generateTemplateBlob(): Blob {
-  const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS]);
-  
-  // Set column widths
-  ws['!cols'] = [
-    { wch: 10 }, // Tipo
-    { wch: 25 }, // Nombre
-    { wch: 15 }, // Categoría
-    { wch: 20 }, // Importe
-    { wch: 20 }, // Periodicidad
-    { wch: 20 }, // Primer Periodo (Mes)
-    { wch: 20 }, // Primer Periodo (Año)
-    { wch: 20 }, // Tipo de Fecha
-    { wch: 12 }, // Día
-    { wch: 25 }, // Meses Personalizados
+import ExcelJS from 'exceljs';
+
+export async function generateTemplateBlob(): Promise<Blob> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('Plantilla Importación');
+
+  ws.columns = [
+    { header: 'Tipo', key: 'tipo', width: 15 },
+    { header: 'Nombre', key: 'nombre', width: 25 },
+    { header: 'Categoría', key: 'categoria', width: 20 },
+    { header: 'Importe Previsto (€)', key: 'importe', width: 22 },
+    { header: 'Periodicidad', key: 'periodicidad', width: 20 },
+    { header: 'Primer Periodo (Mes)', key: 'primerPeriodoMes', width: 22 },
+    { header: 'Primer Periodo (Año)', key: 'primerPeriodoAno', width: 22 },
+    { header: 'Tipo de Fecha', key: 'tipoDeFecha', width: 20 },
+    { header: 'Día (1-31)', key: 'dia', width: 12 },
+    { header: 'Meses Personalizados', key: 'mesesPersonalizados', width: 25 }
   ];
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Importación');
+  // Header style
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
 
-  // Generate ArrayBuffer and create Blob
-  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  return new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // Add 500 empty rows with data validation
+  for (let i = 2; i <= 501; i++) {
+    ws.getCell(`A${i}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Gasto,Ingreso"']
+    };
+    ws.getCell(`C${i}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Suscripción,Impuesto,Tasa,Seguro,Salario,Paga Extra,Ingreso Extra,Otro"']
+    };
+    ws.getCell(`D${i}`).dataValidation = {
+      type: 'decimal',
+      operator: 'greaterThan',
+      allowBlank: true,
+      formulae: [0],
+      showErrorMessage: true,
+      errorStyle: 'error',
+      errorTitle: 'Importe inválido',
+      error: 'El importe debe ser un número mayor a 0.'
+    };
+    ws.getCell(`E${i}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Mensual,Trimestral,Semestral,Anual,Meses Personalizados,Pago Único"']
+    };
+    ws.getCell(`F${i}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Enero,Febrero,Marzo,Abril,Mayo,Junio,Julio,Agosto,Septiembre,Octubre,Noviembre,Diciembre"']
+    };
+    ws.getCell(`H${i}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: ['"Día exacto,Día aproximado,Solo mes (sin día)"']
+    };
+    ws.getCell(`I${i}`).dataValidation = {
+      type: 'whole',
+      operator: 'between',
+      allowBlank: true,
+      formulae: [1, 31],
+      showErrorMessage: true,
+      errorStyle: 'error',
+      errorTitle: 'Día inválido',
+      error: 'El día debe ser un número entre 1 y 31.'
+    };
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 export function parseExcelFile(file: File): Promise<ImportRecord[]> {
