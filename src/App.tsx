@@ -14,6 +14,7 @@ import {
   ConceptDetailsRoute, 
   AnnualRoute, 
   SettingsRoute,
+  ImportRoute,
   NotFoundRoute
 } from './routes/Routes';
 
@@ -45,6 +46,10 @@ const routes: RouteObject[] = [
       {
         path: "configuracion",
         element: <SettingsRoute />,
+      },
+      {
+        path: "importar",
+        element: <ImportRoute />,
       },
       {
         path: "*",

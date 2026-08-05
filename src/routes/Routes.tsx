@@ -12,6 +12,7 @@ import { ConceptsView } from '../components/ConceptsView';
 import { ConceptDetailsView } from '../components/ConceptDetailsView';
 import { PaymentDetailsPanel } from '../components/PaymentDetailsPanel';
 import { ConceptForm } from '../components/ConceptForm';
+import { ImportView } from '../components/ImportView';
 import { useEffect } from 'react';
 
 export function ProtectedRoute() {
@@ -174,6 +175,10 @@ export function SettingsRoute() {
       onLogout={logout}
     />
   );
+}
+
+export function ImportRoute() {
+  return <ImportView />;
 }
 
 export function NotFoundRoute() {

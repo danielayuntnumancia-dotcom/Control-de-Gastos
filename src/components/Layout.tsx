@@ -31,6 +31,7 @@ export function Layout() {
       if (path === '/conceptos') return 'Conceptos';
       return 'Detalle del Concepto';
     }
+    if (path === '/importar') return 'Importar Datos';
     if (path === '/resumen') return 'Resumen Anual';
     if (path === '/configuracion') return 'Configuración';
     return '';
@@ -76,6 +77,13 @@ export function Layout() {
             >
               <span className="material-symbols-outlined text-[24px] md:text-[20px]">list_alt</span>
               <span className="text-[10px] md:text-base">Conceptos</span>
+            </NavLink>
+            <NavLink 
+              to="/importar"
+              className={({ isActive }) => `flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 px-2 md:px-4 py-2 md:py-3 rounded-lg transition-colors flex-1 md:w-full ${isActive ? 'md:bg-indigo-600 text-indigo-400 md:text-white' : 'hover:bg-slate-800'}`}
+            >
+              <span className="material-symbols-outlined text-[24px] md:text-[20px]">upload_file</span>
+              <span className="text-[10px] md:text-base">Importar</span>
             </NavLink>
 
             <div className="relative flex-1 md:w-full md:hidden flex justify-center group"> 
