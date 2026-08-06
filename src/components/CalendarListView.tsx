@@ -29,7 +29,11 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
 
   payments.forEach(p => {
     if (p.status === 'CANCELED') return;
-    if (p.dueDate.getMonth() !== month || p.dueDate.getFullYear() !== year) return;
+    
+    const pYear = p.originalPeriodYear !== undefined ? p.originalPeriodYear : p.dueDate.getFullYear();
+    const pMonth = p.originalPeriodMonth !== undefined ? p.originalPeriodMonth : p.dueDate.getMonth();
+
+    if (pMonth !== month || pYear !== year) return;
 
     const concept = concepts.find(c => c.id === p.conceptId);
     if (!concept) return;

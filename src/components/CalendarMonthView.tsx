@@ -52,7 +52,11 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
   // We'll place all payments whose `dueDate` falls in this month.
   payments.forEach(p => {
     if (p.status === 'CANCELED') return;
-    if (p.dueDate.getMonth() !== month || p.dueDate.getFullYear() !== year) return;
+    
+    const pYear = p.originalPeriodYear !== undefined ? p.originalPeriodYear : p.dueDate.getFullYear();
+    const pMonth = p.originalPeriodMonth !== undefined ? p.originalPeriodMonth : p.dueDate.getMonth();
+
+    if (pMonth !== month || pYear !== year) return;
     
     const concept = concepts.find(c => c.id === p.conceptId);
     if (!concept) return;
@@ -73,7 +77,12 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
     } else if (concept.dateType === 'month_only') {
       outOfGrid_SinDia.push(p);
     } else {
-      const day = p.dueDate.getDate();
+      let day = p.dueDate.getDate();
+      if (p.dueDate.getMonth() !== month) {
+        day = concept.day && concept.day > 0 ? concept.day : 1;
+      }
+      if (day > daysInMonth) day = daysInMonth;
+
       if (!gridPayments.has(day)) gridPayments.set(day, []);
       gridPayments.get(day)!.push(p);
     }

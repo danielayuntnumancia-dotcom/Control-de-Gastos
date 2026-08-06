@@ -126,7 +126,6 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       status: 'PAID',
       actualAmount: Math.round(amt * 100),
       actualDate: updatedDate,
-      dueDate: updatedDate,
       description: description.trim()
     }, actionState);
   };

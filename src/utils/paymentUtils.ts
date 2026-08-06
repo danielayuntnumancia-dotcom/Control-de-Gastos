@@ -73,12 +73,26 @@ export async function syncAllConceptPayments(userUid: string, concepts: Concept[
   const snapAll = await getDocs(qAll);
 
   const existingMap = new Set<string>();
+  const conceptsMap = new Map(concepts.map(c => [c.id, c]));
+
   snapAll.docs.forEach(d => {
     const data = d.data();
     if (!data.conceptId) return;
     const pYear = data.originalPeriodYear !== undefined ? data.originalPeriodYear : (data.dueDate?.toDate ? data.dueDate.toDate().getFullYear() : new Date(data.dueDate).getFullYear());
     const pMonth = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : (data.dueDate?.toDate ? data.dueDate.toDate().getMonth() : new Date(data.dueDate).getMonth());
     existingMap.add(`${data.conceptId}_${pYear}_${pMonth}`);
+
+    // Retroactive repair: if payment was PAID and dueDate got changed to a different month than originalPeriod, fix dueDate
+    if (data.status === 'PAID' && data.originalPeriodYear !== undefined && data.originalPeriodMonth !== undefined) {
+      const pDueDate = data.dueDate?.toDate ? data.dueDate.toDate() : new Date(data.dueDate);
+      if (pDueDate.getMonth() !== data.originalPeriodMonth || pDueDate.getFullYear() !== data.originalPeriodYear) {
+        const c = conceptsMap.get(data.conceptId);
+        const targetDay = c && c.day && c.day > 0 ? c.day : (pDueDate.getDate() || 1);
+        const restoredDate = new Date(data.originalPeriodYear, data.originalPeriodMonth, targetDay);
+        batch.update(d.ref, { dueDate: restoredDate });
+        totalCreated++; // count updates as work done
+      }
+    }
   });
 
   for (const concept of concepts) {
