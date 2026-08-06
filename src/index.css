@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+/* Eliminar outline negro en gráficas de Recharts al hacer clic */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus,
+.recharts-rectangle:focus,
+.recharts-sector:focus,
+.recharts-layer:focus,
+svg:focus,
+svg *:focus {
+  outline: none !important;
+}
