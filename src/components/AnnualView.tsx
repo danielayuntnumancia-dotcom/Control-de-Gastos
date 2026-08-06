@@ -11,7 +11,7 @@ import {
 } from '../utils/paymentUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { AnnualBreakdowns } from './AnnualBreakdowns';
-import { MONTH_NAMES, MONTH_NAMES_SHORT } from '../utils/formatUtils';
+import { MONTH_NAMES, MONTH_NAMES_SHORT, formatStatusLabel } from '../utils/formatUtils';
 import { useAppState } from '../context/AppStateContext';
 
 interface AnnualViewProps {
@@ -457,7 +457,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                           >
                             <div className="flex flex-col">
                               <span className="text-sm font-semibold text-slate-800">{concept?.name || p.concept}</span>
-                              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{p.status}</span>
+                              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{formatStatusLabel(p.status)}</span>
                             </div>
                             <div className="text-right">
                               <span className={`block text-sm font-bold ${isPending ? 'text-orange-600' : 'text-slate-900'}`}>

@@ -3,6 +3,20 @@ import { Payment, Concept } from '../types';
 export const MONTH_NAMES_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 export const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
+export function formatStatusLabel(status: string): string {
+  switch (status) {
+    case 'PENDING': return 'Pendiente';
+    case 'PAID': return 'Pagado';
+    case 'PENDING_DATE': return 'Fecha pendiente';
+    case 'OVERDUE': return 'Vencido';
+    case 'APPROX_OVERDUE': return 'Vencido (Aprox)';
+    case 'CANCELED': return 'Cancelado';
+    case 'NO_NOTICE': return 'Sin aviso';
+    case 'REFUNDED': return 'Devuelto';
+    default: return status;
+  }
+}
+
 export function formatPaymentDate(payment: Payment, concept?: Concept) {
   if (payment.status === 'PENDING_DATE' || payment.status === 'APPROX_OVERDUE') {
     if (concept?.dateType === 'approximate') {

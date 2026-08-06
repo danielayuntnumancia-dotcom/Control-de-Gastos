@@ -6,6 +6,7 @@ import {
   calculateDiferenciaConfirmada, 
   PENDING_STATUSES
 } from '../utils/paymentUtils';
+import { formatStatusLabel } from '../utils/formatUtils';
 
 interface AnnualBreakdownsProps {
   payments: Payment[];
@@ -94,7 +95,7 @@ export function AnnualBreakdowns({ payments, concepts, onOpenPayment }: AnnualBr
           {byStatus.map(s => (
             <div key={s.name} className="p-4 hover:bg-slate-50 transition-colors">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-slate-800">{s.name}</span>
+                <span className="text-sm font-bold text-slate-800">{formatStatusLabel(s.name)}</span>
                 <span className="text-xs font-medium text-slate-500">{s.total} recibos</span>
               </div>
               <div className="flex justify-between text-sm">
