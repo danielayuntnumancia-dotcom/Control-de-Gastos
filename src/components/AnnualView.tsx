@@ -240,10 +240,21 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
           </div>
 
           <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-base md:text-lg font-bold text-slate-800 mb-6">Evolución Mensual</h3>
+            <h3 className="text-base md:text-lg font-bold text-slate-800 mb-1">Evolución Mensual</h3>
+            <p className="text-xs text-slate-400 mb-5">Haz clic en una barra para ver ese mes en el calendario</p>
             <div className="h-64 md:h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                <BarChart 
+                  data={chartData} 
+                  margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                  onClick={(data) => {
+                    if (data && data.activePayload && data.activePayload.length > 0) {
+                      const monthIndex = data.activePayload[0].payload.monthIndex;
+                      if (monthIndex !== undefined) handleNavigateToMonth(monthIndex);
+                    }
+                  }}
+                  style={{ cursor: 'pointer', outline: 'none' }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                   <YAxis 
@@ -254,14 +265,14 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                     width={50}
                   />
                   <Tooltip 
-                    cursor={{ fill: '#f8fafc' }}
+                    cursor={{ fill: '#eef2ff' }}
                     formatter={(value: number) => value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', outline: 'none' }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                   <ReferenceLine y={0} stroke="#cbd5e1" />
-                  <Bar dataKey="IngresosReal" name="Ingresos (Real)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="GastosReal" name="Gastos (Real)" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="IngresosReal" name="Ingresos (Real)" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} style={{ outline: 'none' }} />
+                  <Bar dataKey="GastosReal" name="Gastos (Real)" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} style={{ outline: 'none' }} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
