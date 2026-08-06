@@ -76,7 +76,7 @@ export function DashboardRoute() {
 
 export function MonthlyRoute() {
   const { payments, concepts } = useData();
-  const { globalYear, setGlobalYear, setSelectedPayment } = useAppState();
+  const { globalYear, setGlobalYear, globalMonth, setGlobalMonth, setSelectedPayment } = useAppState();
   
   return (
     <MonthlyView 
@@ -85,6 +85,8 @@ export function MonthlyRoute() {
       onOpenPayment={setSelectedPayment}
       globalYear={globalYear}
       setGlobalYear={setGlobalYear}
+      globalMonth={globalMonth}
+      setGlobalMonth={setGlobalMonth}
     />
   );
 }

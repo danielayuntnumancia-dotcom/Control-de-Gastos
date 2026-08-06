@@ -4,6 +4,8 @@ import { Payment, Concept } from '../types';
 interface AppStateContextType {
   globalYear: number;
   setGlobalYear: (year: number) => void;
+  globalMonth: number;
+  setGlobalMonth: (month: number) => void;
   selectedPayment: Payment | null;
   setSelectedPayment: (payment: Payment | null) => void;
   isConceptFormOpen: boolean;
@@ -16,6 +18,7 @@ const AppStateContext = createContext<AppStateContextType | undefined>(undefined
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [globalYear, setGlobalYear] = useState<number>(new Date().getFullYear());
+  const [globalMonth, setGlobalMonth] = useState<number>(new Date().getMonth());
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isConceptFormOpen, setIsConceptFormOpen] = useState(false);
   const [editingConcept, setEditingConcept] = useState<Concept | undefined>();
@@ -23,6 +26,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppStateContext.Provider value={{
       globalYear, setGlobalYear,
+      globalMonth, setGlobalMonth,
       selectedPayment, setSelectedPayment,
       isConceptFormOpen, setIsConceptFormOpen,
       editingConcept, setEditingConcept

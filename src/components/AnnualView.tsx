@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Payment, Concept } from '../types';
 import { 
   calculateTotalPrevisto, 
@@ -11,6 +12,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { AnnualBreakdowns } from './AnnualBreakdowns';
 import { MONTH_NAMES, MONTH_NAMES_SHORT } from '../utils/formatUtils';
+import { useAppState } from '../context/AppStateContext';
 
 interface AnnualViewProps {
   payments: Payment[];
@@ -21,7 +23,15 @@ interface AnnualViewProps {
 }
 
 export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOpenPayment }: AnnualViewProps) {
+  const navigate = useNavigate();
+  const { setGlobalMonth } = useAppState();
   const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
+
+  const handleNavigateToMonth = (monthIndex: number) => {
+    setGlobalYear(globalYear);
+    setGlobalMonth(monthIndex);
+    navigate('/calendario');
+  };
 
   // Search & Sort states for matrix
   const [searchQuery, setSearchQuery] = useState('');
@@ -306,8 +316,16 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50 z-10 w-48 shadow-[1px_0_0_0_#e2e8f0]">Concepto</th>
                     <th className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right w-24">Total Año</th>
-                    {MONTH_NAMES_SHORT.map(m => (
-                      <th key={m} className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right min-w-[70px]">{m}</th>
+                    {MONTH_NAMES_SHORT.map((m, i) => (
+                      <th 
+                        key={m} 
+                        className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right min-w-[70px] cursor-pointer hover:bg-indigo-50 hover:text-indigo-600 transition-colors group"
+                        onClick={() => handleNavigateToMonth(i)}
+                        title={`Ver ${m} en el calendario`}
+                      >
+                        {m}
+                        <span className="material-symbols-outlined text-[10px] opacity-0 group-hover:opacity-100 ml-0.5 align-middle transition-opacity">open_in_new</span>
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -394,6 +412,14 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                       <span className="block text-xs text-slate-500">{monthPayments.length} recibos • {mPendientes} pdtes.</span>
                     </div>
                     <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleNavigateToMonth(index); }}
+                        className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-full transition-colors"
+                        title="Ver en calendario"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">calendar_month</span>
+                        Ver
+                      </button>
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex items-center gap-2 text-[10px]">
                           <span className="text-emerald-600 font-bold flex items-center"><span className="material-symbols-outlined text-[10px]">arrow_upward</span> {mRealInfo.incomes.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>

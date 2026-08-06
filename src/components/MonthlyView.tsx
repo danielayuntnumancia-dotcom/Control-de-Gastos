@@ -12,13 +12,20 @@ interface MonthlyViewProps {
   onOpenPayment: (payment: Payment) => void;
   globalYear: number;
   setGlobalYear: React.Dispatch<React.SetStateAction<number>>;
+  globalMonth?: number;
+  setGlobalMonth?: (month: number) => void;
 }
 
-export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, setGlobalYear }: MonthlyViewProps) {
+export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, setGlobalYear, globalMonth, setGlobalMonth }: MonthlyViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   
   const today = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
+  const [selectedMonth, setSelectedMonthLocal] = useState(globalMonth !== undefined ? globalMonth : today.getMonth());
+
+  const setSelectedMonth = (m: number) => {
+    setSelectedMonthLocal(m);
+    if (setGlobalMonth) setGlobalMonth(m);
+  };
   // Removed local globalYear
 
   // Filters
@@ -30,7 +37,7 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
       setSelectedMonth(11);
       setGlobalYear(y => y - 1);
     } else {
-      setSelectedMonth(m => m - 1);
+      setSelectedMonth(selectedMonth - 1);
     }
   };
 
@@ -39,7 +46,7 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
       setSelectedMonth(0);
       setGlobalYear(y => y + 1);
     } else {
-      setSelectedMonth(m => m + 1);
+      setSelectedMonth(selectedMonth + 1);
     }
   };
 
