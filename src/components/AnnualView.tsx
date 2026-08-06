@@ -247,7 +247,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                 <BarChart 
                   data={chartData} 
                   margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     if (data && data.activePayload && data.activePayload.length > 0) {
                       const monthIndex = data.activePayload[0].payload.monthIndex;
                       if (monthIndex !== undefined) handleNavigateToMonth(monthIndex);

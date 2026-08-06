@@ -37,12 +37,10 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   const [amountType, setAmountType] = useState<Concept['amountType']>(initialConcept?.amountType || 'exact');
   const [color, setColor] = useState(initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción'));
 
-  // Update color automatically when category changes, IF it hasn't been manually customized
+  // Update color automatically when category changes
   useEffect(() => {
-    if (!initialConcept) {
-      setColor(getCategoryColor(category));
-    }
-  }, [category, initialConcept]);
+    setColor(getCategoryColor(category));
+  }, [category]);
 
   useEffect(() => {
     if (!initialConcept) {

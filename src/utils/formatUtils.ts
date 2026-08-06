@@ -54,10 +54,7 @@ export function getCategoryColor(category: string): string {
 }
 
 export function getConceptColor(concept: { color?: string, category: string }): string {
-  if (!concept.color || concept.color.toUpperCase() === '#315E87') {
-    return getCategoryColor(concept.category);
-  }
-  return concept.color;
+  return getCategoryColor(concept.category);
 }
 
 export function formatAmount(cents: number, type: 'expense' | 'income' = 'expense', isApproximate: boolean = false): string {
