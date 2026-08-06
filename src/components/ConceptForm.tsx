@@ -115,7 +115,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   };
 
   const currentYear = new Date().getFullYear();
-  const yearsToGenerate = [currentYear, currentYear + 1];
+  const startYear = Math.min(firstPeriodYear, currentYear);
+  const endYear = currentYear + 1;
+  const yearsToGenerate = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
 
   const previewOccurrences = useMemo(() => {
     const occurrences = generateOccurrences({
@@ -149,16 +151,23 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     }
 
     const isEdit = !!initialConcept;
+    const initialFirstPeriodTime = initialConcept?.firstPeriod
+      ? (typeof (initialConcept.firstPeriod as any).toDate === 'function' 
+          ? (initialConcept.firstPeriod as any).toDate().getTime() 
+          : new Date(initialConcept.firstPeriod).getTime())
+      : 0;
+    const newFirstPeriodTime = new Date(firstPeriodYear, firstPeriodMonth, 1).getTime();
+
     const ruleChanged = isEdit && (
       initialConcept.periodicity !== periodicity ||
       initialConcept.dateType !== dateType ||
       initialConcept.day !== (dateType === 'month_only' ? null : Number(day)) ||
-      initialConcept.firstPeriod.getTime() !== new Date(firstPeriodYear, firstPeriodMonth, 1).getTime() ||
+      initialFirstPeriodTime !== newFirstPeriodTime ||
       JSON.stringify(initialConcept.customMonths) !== JSON.stringify(customMonths)
     );
 
     if (ruleChanged) {
-      if (!confirm("Has modificado las reglas de periodicidad o fecha. Se regenerarán los vencimientos futuros pendientes. ¿Continuar?")) {
+      if (!confirm("Has modificado las reglas de periodicidad o fecha. Se regenerarán los vencimientos pendientes. ¿Continuar?")) {
         return;
       }
     }
@@ -192,23 +201,36 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       batch.set(conceptRef, conceptData, { merge: true });
 
       if (!isEdit || ruleChanged) {
-        // If it's an edit and rules changed, delete future pending payments for this concept
-        if (ruleChanged) {
-          const now = new Date();
-          const q = query(
-            collection(db, 'payments'), 
-            where('conceptId', '==', conceptRef.id),
-            where('userId', '==', user.uid),
-            where('status', 'in', ['PENDING', 'PENDING_DATE', 'CANCELED'])
-          );
-          const snap = await getDocs(q);
-          snap.forEach(d => {
-            // Only delete if dueDate is in the future
-            if (d.data().dueDate.toDate() >= now) {
+        // Query ALL existing payments for this concept to avoid duplicating receipts
+        const qExisting = query(
+          collection(db, 'payments'),
+          where('conceptId', '==', conceptRef.id),
+          where('userId', '==', user.uid)
+        );
+        const snapExisting = await getDocs(qExisting);
+        const existingKeySet = new Set<string>();
+
+        snapExisting.docs.forEach(d => {
+          const data = d.data();
+          const pYear = data.originalPeriodYear !== undefined ? data.originalPeriodYear : (data.dueDate?.toDate ? data.dueDate.toDate().getFullYear() : new Date(data.dueDate).getFullYear());
+          const pMonth = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : (data.dueDate?.toDate ? data.dueDate.toDate().getMonth() : new Date(data.dueDate).getMonth());
+          const key = `${pYear}-${pMonth}`;
+
+          if (ruleChanged) {
+            const now = new Date();
+            const pDate = data.dueDate?.toDate ? data.dueDate.toDate() : new Date(data.dueDate);
+            const isPendingOrCanceled = ['PENDING', 'PENDING_DATE', 'CANCELED'].includes(data.status);
+            const beforeFirstPeriod = pYear < firstPeriodYear || (pYear === firstPeriodYear && pMonth < firstPeriodMonth);
+            
+            // Delete if pending/canceled AND (future OR falls before the new firstPeriod)
+            if (isPendingOrCanceled && (pDate >= now || beforeFirstPeriod)) {
               batch.delete(d.ref);
+              return;
             }
-          });
-        }
+          }
+
+          existingKeySet.add(key);
+        });
 
         // Generate occurrences
         const occurrences = generateOccurrences({
@@ -221,8 +243,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         }, yearsToGenerate);
 
         for (const occ of occurrences) {
-          const now = new Date();
-          if (!isEdit || occ.dueDate >= now) {
+          const key = `${occ.originalPeriodYear}-${occ.originalPeriodMonth}`;
+          if (!existingKeySet.has(key)) {
             const occRef = doc(collection(db, 'payments'));
             batch.set(occRef, {
               userId: user.uid,
@@ -238,6 +260,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               originalPeriodYear: occ.originalPeriodYear,
               createdAt: new Date()
             });
+            existingKeySet.add(key);
           }
         }
       } else if (isEdit && !ruleChanged) {

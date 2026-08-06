@@ -73,12 +73,7 @@ export function ConceptScheduleEditor({ concept, payments, onCancel, onSaved }: 
     newOccurrences.forEach(occ => {
       const existing = existingMap.get(`${occ.year}-${occ.month}`);
       if (!existing) {
-        // We only create if it's not in the past
-        const now = new Date();
-        const isFuture = occ.year > now.getFullYear() || (occ.year === now.getFullYear() && occ.month >= now.getMonth());
-        if (isFuture) {
-          toCreate.push(occ);
-        }
+        toCreate.push(occ);
       } else {
         unmodified.push(existing);
       }
