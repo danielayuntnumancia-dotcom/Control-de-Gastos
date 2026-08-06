@@ -81,6 +81,7 @@ export default function MonthPreviewModal({
               onNextMonth={handleNextMonth}
               onToday={handleToday}
               onOpenPayment={onOpenPayment}
+              isFiltered={false}
             />
           </div>
         </div>

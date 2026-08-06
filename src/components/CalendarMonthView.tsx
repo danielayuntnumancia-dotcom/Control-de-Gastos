@@ -266,15 +266,19 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
               {monthNames[month]} · Sin día concreto
             </h3>
             <div className="space-y-2">
-              {outOfGrid_SinDia.map(p => (
-                <button 
-                  key={p.id} onClick={() => onOpenPayment(p)}
-                  className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors"
-                >
-                  <span className="font-medium text-slate-700">{p.concept}</span>
-                  <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}</span>
-                </button>
-              ))}
+              {outOfGrid_SinDia.map(p => {
+                const conceptSinDia = concepts.find(c => c.id === p.conceptId);
+                const isApproxSinDia = conceptSinDia?.dateType === 'approximate';
+                return (
+                  <button 
+                    key={p.id} onClick={() => onOpenPayment(p)}
+                    className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors"
+                  >
+                    <span className="font-medium text-slate-700">{p.concept}</span>
+                    <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApproxSinDia)}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -286,15 +290,19 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
               Fecha pendiente
             </h3>
             <div className="space-y-2">
-              {outOfGrid_FechaPendiente.map(p => (
-                <button 
-                  key={p.id} onClick={() => onOpenPayment(p)}
-                  className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors border border-orange-100"
-                >
-                  <span className="font-medium text-slate-700">{p.concept}</span>
-                  <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}</span>
-                </button>
-              ))}
+              {outOfGrid_FechaPendiente.map(p => {
+                const conceptFP = concepts.find(c => c.id === p.conceptId);
+                const isApproxFP = conceptFP?.dateType === 'approximate';
+                return (
+                  <button 
+                    key={p.id} onClick={() => onOpenPayment(p)}
+                    className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors border border-orange-100"
+                  >
+                    <span className="font-medium text-slate-700">{p.concept}</span>
+                    <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApproxFP)}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

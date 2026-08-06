@@ -12,5 +12,8 @@
   - La gráfica de evolución anual ahora dibuja dos columnas separadas (verde para ingresos, roja para gastos), permitiendo contrastar volúmenes reales.
   - El desglose móvil del resumen anual muestra ahora insignias detalladas.
 
+- **Importación Masiva (Excel):** Se ha desarrollado e implementado en producción una nueva sección completa ("Importar") que permite descargar una plantilla Excel nativa (generada con exceljs incluyendo reglas de validación en las celdas), subir los datos con una zona drag-and-drop, validarlos mediante una tabla de vista previa (verificando montos, fechas, categorías) e inyectarlos masivamente en Firestore mediante lotes (writeBatch).
+
 ## Tareas pendientes para la próxima
-- **Importación Masiva (Excel / CSV):** Desarrollar la funcionalidad que permita subir un archivo externo con gastos e ingresos, mapear las columnas y generar los registros en Firestore a través de operaciones en Batch, incluyendo una vista previa para el usuario. (Consultar el archivo `plan_importacion_masiva.md` generado en la raíz para recuperar contexto).
+- **Optimización y Bugs:** Revisar errores de compilación (`tsc`) provenientes de otros módulos pre-existentes (como problemas de tipado en `CalendarMonthView` y `ConceptForm`).
+- Escuchar feedback del usuario sobre posibles nuevas métricas o vistas.

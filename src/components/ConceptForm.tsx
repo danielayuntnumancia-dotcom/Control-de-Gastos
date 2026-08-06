@@ -4,7 +4,7 @@ import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'fire
 import { db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
-import { generateOccurrences } from '../utils/occurrenceEngine';
+import { generateOccurrences, paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
 import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor } from '../utils/formatUtils';
 
 interface ConceptFormProps {
