@@ -1,4 +1,7 @@
-import { Payment } from '../types';
+import { Payment, Concept } from '../types';
+import { db } from '../lib/firebase';
+import { writeBatch, collection, getDocs, query, where, doc } from 'firebase/firestore';
+import { generateOccurrences } from './occurrenceEngine';
 
 export const PENDING_STATUSES = ['PENDING', 'OVERDUE', 'APPROX_OVERDUE', 'PENDING_DATE', 'NO_NOTICE'];
 
@@ -59,4 +62,75 @@ export function filterPaymentsByPeriod(payments: Payment[], month: number, year:
 
 export function filterPaymentsByYear(payments: Payment[], year: number): Payment[] {
   return payments.filter(p => p.originalPeriodYear === year && p.status !== 'CANCELED');
+}
+
+export async function syncAllConceptPayments(userUid: string, concepts: Concept[]): Promise<number> {
+  const currentYear = new Date().getFullYear();
+  const batch = writeBatch(db);
+  let totalCreated = 0;
+
+  const qAll = query(collection(db, 'payments'), where('userId', '==', userUid));
+  const snapAll = await getDocs(qAll);
+
+  const existingMap = new Set<string>();
+  snapAll.docs.forEach(d => {
+    const data = d.data();
+    if (!data.conceptId) return;
+    const pYear = data.originalPeriodYear !== undefined ? data.originalPeriodYear : (data.dueDate?.toDate ? data.dueDate.toDate().getFullYear() : new Date(data.dueDate).getFullYear());
+    const pMonth = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : (data.dueDate?.toDate ? data.dueDate.toDate().getMonth() : new Date(data.dueDate).getMonth());
+    existingMap.add(`${data.conceptId}_${pYear}_${pMonth}`);
+  });
+
+  for (const concept of concepts) {
+    if (!concept.active) continue;
+
+    const firstPeriod = concept.firstPeriod && typeof (concept.firstPeriod as any).toDate === 'function'
+      ? (concept.firstPeriod as any).toDate()
+      : new Date(concept.firstPeriod);
+
+    const firstPeriodYear = firstPeriod.getFullYear();
+    const firstPeriodMonth = firstPeriod.getMonth();
+
+    const startYear = Math.min(firstPeriodYear, currentYear);
+    const endYear = currentYear + 1;
+    const yearsToGenerate = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
+    const occurrences = generateOccurrences({
+      periodicity: concept.periodicity,
+      dateType: concept.dateType,
+      day: concept.day,
+      firstPeriodYear,
+      firstPeriodMonth,
+      customMonths: concept.customMonths || []
+    }, yearsToGenerate);
+
+    for (const occ of occurrences) {
+      const key = `${concept.id}_${occ.originalPeriodYear}_${occ.originalPeriodMonth}`;
+      if (!existingMap.has(key)) {
+        const occRef = doc(collection(db, 'payments'));
+        batch.set(occRef, {
+          userId: userUid,
+          conceptId: concept.id,
+          concept: concept.name,
+          type: concept.type || 'expense',
+          expectedAmount: concept.expectedAmount,
+          isAmountApproximate: concept.amountType === 'approximate',
+          actualAmount: null,
+          status: occ.status,
+          dueDate: occ.dueDate,
+          originalPeriodMonth: occ.originalPeriodMonth,
+          originalPeriodYear: occ.originalPeriodYear,
+          createdAt: new Date()
+        });
+        existingMap.add(key);
+        totalCreated++;
+      }
+    }
+  }
+
+  if (totalCreated > 0) {
+    await batch.commit();
+  }
+
+  return totalCreated;
 }

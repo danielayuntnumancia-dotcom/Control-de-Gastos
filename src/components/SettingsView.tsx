@@ -4,6 +4,7 @@ import { UserSettings, Payment, Concept } from '../types';
 import { db } from '../lib/firebase';
 import { doc, setDoc, serverTimestamp, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { generateAnnualPayments } from '../utils/paymentGenerator';
+import { syncAllConceptPayments } from '../utils/paymentUtils';
 import packageJson from '../../package.json';
 
 interface SettingsViewProps {
@@ -22,9 +23,11 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notificationsEnabled);
   const [generalNoticeDays, setGeneralNoticeDays] = useState(settings.generalNoticeDays);
 
-  // Ampliación
+  // Ampliación & Sincronización
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateMessage, setGenerateMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
   // Eliminación
   const [isDeleting, setIsDeleting] = useState(false);
@@ -113,6 +116,24 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
       setGenerateMessage({ type: 'error', text: error instanceof Error ? error.message : 'Error al generar el año.' });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSyncAllPayments = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const createdCount = await syncAllConceptPayments(user.uid, concepts);
+      if (createdCount > 0) {
+        setSyncMessage({ type: 'success', text: `¡Sincronización completada! Se crearon ${createdCount} recibos faltantes.` });
+      } else {
+        setSyncMessage({ type: 'success', text: 'Todos los conceptos ya tienen sus recibos al día.' });
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncMessage({ type: 'error', text: 'Error al sincronizar los recibos.' });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -240,6 +261,30 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
               {generateMessage && (
                 <span className={`text-sm ${generateMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
                   {generateMessage.text}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="border border-emerald-100 bg-emerald-50/50 rounded-lg p-4 mt-4">
+            <h4 className="text-sm font-bold text-emerald-900 mb-2">Sincronización retroactiva de recibos</h4>
+            <p className="text-sm text-emerald-700 mb-4">
+              ¿Modificaste la fecha de inicio de tus conceptos? Haz clic aquí para buscar y generar automáticamente todos los recibos faltantes desde su fecha de inicio inicial hasta hoy.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <button 
+                onClick={handleSyncAllPayments}
+                disabled={isSyncing}
+                className="px-4 py-2 bg-emerald-600 border border-emerald-700 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-sm"
+              >
+                {isSyncing ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">sync</span>}
+                Sincronizar recibos faltantes de todos los conceptos
+              </button>
+              
+              {syncMessage && (
+                <span className={`text-sm font-medium ${syncMessage.type === 'success' ? 'text-emerald-800 font-bold' : 'text-red-600'}`}>
+                  {syncMessage.text}
                 </span>
               )}
             </div>

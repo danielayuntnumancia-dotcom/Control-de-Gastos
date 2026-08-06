@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { ConfirmDialog } from './ConfirmDialog';
 import { paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
 import { getConceptColor, formatAmount } from '../utils/formatUtils';
+import { syncAllConceptPayments } from '../utils/paymentUtils';
 import { useAuth } from '../context/AuthContext';
 
 interface ConceptsViewProps {
@@ -20,6 +21,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
   const [sortBy, setSortBy] = useState<'name' | 'next_due' | 'amount'>('name');
   const [viewType, setViewType] = useState<'expense' | 'income'>('expense');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -47,6 +49,24 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
       isDestructive,
       confirmText
     });
+  };
+
+  const handleSync = async () => {
+    if (!user) return;
+    setIsSyncing(true);
+    try {
+      const createdCount = await syncAllConceptPayments(user.uid, concepts);
+      if (createdCount > 0) {
+        alert(`¡Sincronización completada! Se han generado ${createdCount} recibos faltantes.`);
+      } else {
+        alert('Todos tus conceptos ya tienen sus recibos al día.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error al sincronizar recibos.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const filteredConcepts = useMemo(() => {
@@ -253,6 +273,15 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
             <option value="active">Activos</option>
             <option value="inactive">Inactivos</option>
           </select>
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-sm disabled:opacity-50"
+            title="Sincronizar y generar todos los recibos pasados faltantes"
+          >
+            {isSyncing ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">sync</span>}
+            <span>Sincronizar recibos</span>
+          </button>
         </div>
       </div>
 
