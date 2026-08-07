@@ -21,7 +21,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   // Form states
   const [actualAmount, setActualAmount] = useState((payment.expectedAmount / 100).toString());
   const [actualDate, setActualDate] = useState(() => {
-    const d = new Date();
+    const d = payment.actualDate ? payment.actualDate : payment.dueDate;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [effectiveDate, setEffectiveDate] = useState(() => {
@@ -44,13 +44,8 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   useEffect(() => {
     if (actionState === 'view') {
       setActualAmount(((payment.actualAmount ?? payment.expectedAmount) / 100).toString());
-      if (payment.actualDate) {
-        const d = payment.actualDate;
-        setActualDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-      } else {
-        const d = new Date();
-        setActualDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-      }
+      const d = payment.actualDate ? payment.actualDate : payment.dueDate;
+      setActualDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
       const e = payment.dueDate;
       setEffectiveDate(`${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`);
       setDelayedMark(payment.isDelayed === true);
@@ -126,6 +121,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       status: 'PAID',
       actualAmount: Math.round(amt * 100),
       actualDate: updatedDate,
+      dueDate: updatedDate,
       description: description.trim()
     }, actionState);
   };
@@ -263,10 +259,23 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                     {currentDiferencia !== null && currentDiferencia !== 0 && (
                       <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                         <span className="text-sm font-medium text-slate-600">Diferencia</span>
-                        <span className={`text-sm font-bold ${currentDiferencia > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {currentDiferencia > 0 ? '+' : ''}{(currentDiferencia / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                          <span className="text-xs font-medium ml-1">({currentDiferencia > 0 ? 'Sobrecoste' : 'Ahorro o Abono'})</span>
-                        </span>
+                        {(() => {
+                          const isIncome = payment.type === 'income';
+                          const isPositiveEffect = isIncome ? currentDiferencia > 0 : currentDiferencia < 0;
+                          let labelText = '';
+                          if (isIncome) {
+                            labelText = currentDiferencia > 0 ? 'Mayor ingreso' : 'Menor ingreso';
+                          } else {
+                            labelText = currentDiferencia > 0 ? 'Sobrecoste' : 'Ahorro';
+                          }
+
+                          return (
+                            <span className={`text-sm font-bold ${isPositiveEffect ? 'text-green-600' : 'text-red-600'}`}>
+                              {currentDiferencia > 0 ? '+' : ''}{(currentDiferencia / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                              <span className="text-xs font-medium ml-1">({labelText})</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     )}
                   </>

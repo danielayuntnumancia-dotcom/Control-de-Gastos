@@ -11,8 +11,9 @@ import {
 } from '../utils/paymentUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { AnnualBreakdowns } from './AnnualBreakdowns';
-import { MONTH_NAMES, MONTH_NAMES_SHORT, formatStatusLabel } from '../utils/formatUtils';
+import { MONTH_NAMES, MONTH_NAMES_SHORT, formatStatusLabel, getCategoryColor } from '../utils/formatUtils';
 import { useAppState } from '../context/AppStateContext';
+import { useData } from '../context/DataContext';
 
 interface AnnualViewProps {
   payments: Payment[];
@@ -25,6 +26,7 @@ interface AnnualViewProps {
 export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOpenPayment }: AnnualViewProps) {
   const navigate = useNavigate();
   const { setGlobalMonth } = useAppState();
+  const { customCategories } = useData();
   const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
 
   const handleNavigateToMonth = (monthIndex: number) => {
@@ -37,6 +39,16 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'previsto' | 'real'>('name');
   const [sortDesc, setSortDesc] = useState(false);
+  const [isIncomeCollapsed, setIsIncomeCollapsed] = useState(false);
+  const [isExpenseCollapsed, setIsExpenseCollapsed] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryCollapse = (catName: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [catName]: !prev[catName]
+    }));
+  };
 
   const conceptsMap = useMemo(() => new Map(concepts.map(c => [c.id, c])), [concepts]);
 
@@ -76,23 +88,34 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
 
     const rows = conceptsInYear.map(c => {
       const conceptPayments = thisYearPayments.filter(p => p.conceptId === c.id);
-      
-      const row: any = {
-        concept: c,
-        totalPrevisto: calculateTotalPrevisto(conceptPayments).net,
-        totalReal: calculateTotalPagadoReal(conceptPayments).net,
-        months: {}
-      };
+      const isIncome = c.type === 'income' || (!c.type && (['Salario', 'Paga Extra', 'Ingreso Extra'].includes(c.category) || conceptPayments.some(p => p.type === 'income')));
+
+      const prevTotals = calculateTotalPrevisto(conceptPayments);
+      const realTotals = calculateTotalPagadoReal(conceptPayments);
+
+      const totalPrevisto = isIncome ? prevTotals.incomes : prevTotals.expenses;
+      const totalReal = isIncome ? realTotals.incomes : realTotals.expenses;
+
+      const months: Record<number, { previsto: number; real: number; payments: Payment[] }> = {};
 
       for (let i = 0; i < 12; i++) {
         const p = conceptPayments.filter(p => p.originalPeriodMonth === i);
-        row.months[i] = {
-          previsto: calculateTotalPrevisto(p).net,
-          real: calculateTotalPagadoReal(p).net,
+        const mPrev = calculateTotalPrevisto(p);
+        const mReal = calculateTotalPagadoReal(p);
+        months[i] = {
+          previsto: isIncome ? mPrev.incomes : mPrev.expenses,
+          real: isIncome ? mReal.incomes : mReal.expenses,
           payments: p
         };
       }
-      return row;
+
+      return {
+        concept: c,
+        isIncome,
+        totalPrevisto,
+        totalReal,
+        months
+      };
     });
 
     // Filter
@@ -112,25 +135,79 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
       return sortDesc ? -diff : diff;
     });
 
-    return filteredRows;
+    const incomeRows = filteredRows.filter(r => r.isIncome);
+    const expenseRows = filteredRows.filter(r => !r.isIncome);
+
+    return { incomeRows, expenseRows, allRows: filteredRows };
   }, [thisYearPayments, concepts, searchQuery, sortBy, sortDesc]);
 
-  const filteredTotals = useMemo(() => {
-    let globalPrev = 0;
-    let globalReal = 0;
-    const monthlyPrev = Array(12).fill(0);
-    const monthlyReal = Array(12).fill(0);
+  const expenseCategories = useMemo(() => {
+    const map = new Map<string, typeof matrixData.expenseRows>();
+    matrixData.expenseRows.forEach(row => {
+      const cat = row.concept.category || 'Otro';
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(row);
+    });
 
-    matrixData.forEach(row => {
-      globalPrev += row.totalPrevisto;
-      globalReal += row.totalReal;
-      for (let i = 0; i < 12; i++) {
-        monthlyPrev[i] += row.months[i].previsto;
-        monthlyReal[i] += row.months[i].real;
+    return Array.from(map.entries()).map(([category, rows]) => {
+      const catTotalReal = rows.reduce((sum, r) => sum + r.totalReal, 0);
+      const catTotalPrevisto = rows.reduce((sum, r) => sum + r.totalPrevisto, 0);
+      return {
+        category,
+        rows,
+        catTotalReal,
+        catTotalPrevisto
+      };
+    });
+  }, [matrixData.expenseRows]);
+
+  const filteredTotals = useMemo(() => {
+    let globalExpensePrev = 0;
+    let globalExpenseReal = 0;
+    let globalIncomePrev = 0;
+    let globalIncomeReal = 0;
+
+    const monthlyExpensePrev = Array(12).fill(0);
+    const monthlyExpenseReal = Array(12).fill(0);
+    const monthlyIncomePrev = Array(12).fill(0);
+    const monthlyIncomeReal = Array(12).fill(0);
+
+    matrixData.allRows.forEach(row => {
+      if (row.isIncome) {
+        globalIncomePrev += row.totalPrevisto;
+        globalIncomeReal += row.totalReal;
+        for (let i = 0; i < 12; i++) {
+          monthlyIncomePrev[i] += row.months[i].previsto;
+          monthlyIncomeReal[i] += row.months[i].real;
+        }
+      } else {
+        globalExpensePrev += row.totalPrevisto;
+        globalExpenseReal += row.totalReal;
+        for (let i = 0; i < 12; i++) {
+          monthlyExpensePrev[i] += row.months[i].previsto;
+          monthlyExpenseReal[i] += row.months[i].real;
+        }
       }
     });
 
-    return { globalPrev, globalReal, monthlyPrev, monthlyReal };
+    const globalNetReal = globalIncomeReal - globalExpenseReal;
+    const monthlyNetReal = Array(12).fill(0);
+    for (let i = 0; i < 12; i++) {
+      monthlyNetReal[i] = monthlyIncomeReal[i] - monthlyExpenseReal[i];
+    }
+
+    return { 
+      globalExpensePrev, 
+      globalExpenseReal, 
+      globalIncomePrev, 
+      globalIncomeReal,
+      globalNetReal,
+      monthlyExpensePrev, 
+      monthlyExpenseReal,
+      monthlyIncomePrev,
+      monthlyIncomeReal,
+      monthlyNetReal
+    };
   }, [matrixData]);
 
   const handlePrevYear = () => setGlobalYear(globalYear - 1);
@@ -341,58 +418,268 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {matrixData.map((row) => (
-                    <tr key={row.concept.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white group-hover:bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate max-w-[200px]" title={row.concept.name}>
-                        {row.concept.name}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="text-sm font-bold text-slate-900">{row.totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
-                        {row.totalReal !== row.totalPrevisto && (
-                          <div className="text-[10px] text-slate-500 line-through">{row.totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
-                        )}
-                      </td>
-                      {Array.from({ length: 12 }).map((_, i) => {
-                        const cell = row.months[i];
-                        if (cell.payments.length === 0) return <td key={i} className="p-3 text-center text-slate-300">-</td>;
-                        
-                        const hasPending = cell.payments.some((p: Payment) => p.status !== 'PAID' && p.status !== 'CANCELED');
-                        
-                        return (
-                          <td key={i} className="p-3 text-right cursor-pointer hover:bg-indigo-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
-                            <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-slate-900'}`}>
-                              {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
+                  {/* SECCIÓN INGRESOS */}
+                  {matrixData.incomeRows.length > 0 && (
+                    <>
+                      <tr 
+                        onClick={() => setIsIncomeCollapsed(!isIncomeCollapsed)}
+                        className="bg-emerald-50/80 hover:bg-emerald-100/80 border-y border-emerald-200 cursor-pointer select-none transition-colors group"
+                      >
+                        <td colSpan={14} className="p-2.5 text-xs font-bold text-emerald-900 uppercase tracking-wider sticky left-0 bg-emerald-50/80 group-hover:bg-emerald-100/80 z-10 shadow-[1px_0_0_0_#a7f3d0]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-sm text-emerald-600">arrow_upward</span>
+                              <span>Ingresos ({matrixData.incomeRows.length})</span>
                             </div>
-                            {cell.real > 0 && cell.real !== cell.previsto && (
-                              <div className="text-[10px] text-slate-500 line-through">
-                                {cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                              </div>
-                            )}
-                            {cell.payments.length > 1 && (
-                              <div className="text-[10px] text-indigo-600 font-medium">+{cell.payments.length - 1} más</div>
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                              <span>{isIncomeCollapsed ? 'Mostrar' : 'Plegar'}</span>
+                              <span className={`material-symbols-outlined text-base transition-transform ${isIncomeCollapsed ? '' : 'rotate-180'}`}>
+                                expand_more
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {!isIncomeCollapsed && matrixData.incomeRows.map((row) => (
+                        <tr key={row.concept.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white group-hover:bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate max-w-[200px]" title={row.concept.name}>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                              <span className="truncate">{row.concept.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="text-sm font-bold text-emerald-700">{row.totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                            {row.totalReal !== row.totalPrevisto && (
+                              <div className="text-[10px] text-slate-500 line-through">{row.totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
                             )}
                           </td>
+                          {Array.from({ length: 12 }).map((_, i) => {
+                            const cell = row.months[i];
+                            if (cell.payments.length === 0) return <td key={i} className="p-3 text-center text-slate-300">-</td>;
+                            
+                            const hasPending = cell.payments.some((p: Payment) => p.status !== 'PAID' && p.status !== 'CANCELED');
+                            
+                            return (
+                              <td key={i} className="p-3 text-right cursor-pointer hover:bg-emerald-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
+                                <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-emerald-700'}`}>
+                                  {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
+                                </div>
+                                {cell.real > 0 && cell.real !== cell.previsto && (
+                                  <div className="text-[10px] text-slate-500 line-through">
+                                    {cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                  </div>
+                                )}
+                                {cell.payments.length > 1 && (
+                                  <div className="text-[10px] text-indigo-600 font-medium">+{cell.payments.length - 1} más</div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </>
+                  )}
+
+                  {/* SECCIÓN GASTOS */}
+                  {matrixData.expenseRows.length > 0 && (
+                    <>
+                      <tr 
+                        onClick={() => setIsExpenseCollapsed(!isExpenseCollapsed)}
+                        className="bg-red-50/80 hover:bg-red-100/80 border-y border-red-200 cursor-pointer select-none transition-colors group"
+                      >
+                        <td colSpan={14} className="p-2.5 text-xs font-bold text-red-900 uppercase tracking-wider sticky left-0 bg-red-50/80 group-hover:bg-red-100/80 z-10 shadow-[1px_0_0_0_#fecaca]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-sm text-red-600">arrow_downward</span>
+                              <span>Gastos ({matrixData.expenseRows.length})</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-red-700">
+                              <span>{isExpenseCollapsed ? 'Mostrar' : 'Plegar'}</span>
+                              <span className={`material-symbols-outlined text-base transition-transform ${isExpenseCollapsed ? '' : 'rotate-180'}`}>
+                                expand_more
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {!isExpenseCollapsed && expenseCategories.map(({ category, rows, catTotalReal, catTotalPrevisto }) => {
+                        const isCatCollapsed = !!collapsedCategories[category];
+                        return (
+                          <React.Fragment key={category}>
+                            {/* Category Subheader Row */}
+                            <tr 
+                              onClick={() => toggleCategoryCollapse(category)}
+                              className="bg-slate-100/90 hover:bg-slate-200/90 border-y border-slate-200 cursor-pointer select-none transition-colors group"
+                            >
+                              <td colSpan={14} className="py-2 px-3 text-xs font-bold text-slate-800 sticky left-0 bg-slate-100/90 group-hover:bg-slate-200/90 z-10 shadow-[1px_0_0_0_#cbd5e1]">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    {(() => {
+                                      const customMatch = customCategories.find(c => c.name === category);
+                                      const catColor = getCategoryColor(category, customMatch?.color);
+                                      
+                                      let icon = 'folder';
+                                      let iconClass = 'text-indigo-600';
+                                      let badgeStyle: React.CSSProperties = {};
+                                      let badgeClass = 'bg-white text-slate-600 border-slate-200';
+                                      
+                                      if (category === 'Hipoteca') {
+                                        icon = 'home'; iconClass = 'text-purple-600'; badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+                                      } else if (category === 'Préstamo') {
+                                        icon = 'credit_score'; iconClass = 'text-pink-600'; badgeClass = 'bg-pink-50 text-pink-700 border-pink-200';
+                                      } else if (category === 'Ahorro') {
+                                        icon = 'savings'; iconClass = 'text-blue-600'; badgeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+                                      } else if (customMatch) {
+                                        icon = 'label';
+                                        badgeClass = 'bg-white border-slate-200';
+                                        badgeStyle = { color: catColor, borderColor: catColor, backgroundColor: `${catColor}15` };
+                                      }
+
+                                      return (
+                                        <>
+                                          <span className={`material-symbols-outlined text-sm ${iconClass}`} style={customMatch ? { color: catColor } : undefined}>
+                                            {icon}
+                                          </span>
+                                          <span className="font-bold text-slate-800">{category}</span>
+                                          <span 
+                                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeClass}`}
+                                            style={badgeStyle}
+                                          >
+                                            {rows.length} {rows.length === 1 ? 'concepto' : 'conceptos'}
+                                          </span>
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <div className="text-right">
+                                      <span className="text-xs font-bold text-slate-900">{catTotalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                      {catTotalReal !== catTotalPrevisto && (
+                                        <span className="text-[10px] text-slate-500 line-through ml-1.5">{catTotalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-0.5 text-[11px] font-medium text-slate-600">
+                                      <span>{isCatCollapsed ? 'Mostrar' : 'Plegar'}</span>
+                                      <span className={`material-symbols-outlined text-sm transition-transform ${isCatCollapsed ? '' : 'rotate-180'}`}>
+                                        expand_more
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {/* Category Rows */}
+                            {!isCatCollapsed && rows.map((row) => (
+                              <tr key={row.concept.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white group-hover:bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate max-w-[200px] pl-6" title={row.concept.name}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+                                    <span className="truncate">{row.concept.name}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <div className="text-sm font-bold text-slate-900">{row.totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                                  {row.totalReal !== row.totalPrevisto && (
+                                    <div className="text-[10px] text-slate-500 line-through">{row.totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                                  )}
+                                </td>
+                                {Array.from({ length: 12 }).map((_, i) => {
+                                  const cell = row.months[i];
+                                  if (cell.payments.length === 0) return <td key={i} className="p-3 text-center text-slate-300">-</td>;
+                                  
+                                  const hasPending = cell.payments.some((p: Payment) => p.status !== 'PAID' && p.status !== 'CANCELED');
+                                  
+                                  return (
+                                    <td key={i} className="p-3 text-right cursor-pointer hover:bg-indigo-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
+                                      <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-slate-900'}`}>
+                                        {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
+                                      </div>
+                                      {cell.real > 0 && cell.real !== cell.previsto && (
+                                        <div className="text-[10px] text-slate-500 line-through">
+                                          {cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                        </div>
+                                      )}
+                                      {cell.payments.length > 1 && (
+                                        <div className="text-[10px] text-indigo-600 font-medium">+{cell.payments.length - 1} más</div>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </React.Fragment>
                         );
                       })}
+                    </>
+                  )}
+
+                  {matrixData.allRows.length === 0 && (
+                    <tr>
+                      <td colSpan={14} className="p-6 text-center text-sm text-slate-400 font-medium">
+                        No hay conceptos registradas en este filtro.
+                      </td>
                     </tr>
-                  ))}
-                  {/* Fila de totales mensuales en la tabla */}
-                  <tr className="bg-slate-100 border-t-2 border-slate-200">
-                    <td className="p-3 text-sm font-bold text-slate-800 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0]">
-                      {searchQuery ? 'Totales Filtrados (P)' : 'Totales Mes (Previsto)'}
+                  )}
+
+                  {/* Fila Totales Gastos (Previstos) */}
+                  <tr className="bg-slate-100 border-t-2 border-slate-300">
+                    <td className="p-3 text-xs font-bold text-slate-700 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
+                      {searchQuery ? 'Gastos Previstos (Filtrado)' : 'Totales Gastos (Previsto)'}
                     </td>
-                    <td className="p-3 text-right text-sm font-bold text-slate-800">{filteredTotals.globalPrev.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
-                    {filteredTotals.monthlyPrev.map((v, i) => (
-                      <td key={i} className="p-3 text-right text-xs font-bold text-slate-600">{v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="p-3 text-right text-xs font-bold text-slate-800">
+                      {filteredTotals.globalExpensePrev.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    </td>
+                    {filteredTotals.monthlyExpensePrev.map((v, i) => (
+                      <td key={i} className="p-3 text-right text-xs font-bold text-slate-600">
+                        {v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                      </td>
                     ))}
                   </tr>
+
+                  {/* Fila Totales Gastos (Real) */}
                   <tr className="bg-slate-100 border-t border-slate-200">
-                    <td className="p-3 text-sm font-bold text-slate-800 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0]">
-                      {searchQuery ? 'Totales Filtrados (R)' : 'Totales Mes (Real)'}
+                    <td className="p-3 text-xs font-bold text-red-700 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
+                      {searchQuery ? 'Gastos Reales (Filtrado)' : 'Totales Gastos (Real)'}
                     </td>
-                    <td className="p-3 text-right text-sm font-bold text-green-700">{filteredTotals.globalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
-                    {filteredTotals.monthlyReal.map((v, i) => (
-                      <td key={i} className="p-3 text-right text-xs font-bold text-green-700">{v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                    <td className="p-3 text-right text-xs font-bold text-red-600">
+                      {filteredTotals.globalExpenseReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    </td>
+                    {filteredTotals.monthlyExpenseReal.map((v, i) => (
+                      <td key={i} className="p-3 text-right text-xs font-bold text-red-600">
+                        {v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Fila Totales Ingresos (Real) */}
+                  <tr className="bg-slate-100 border-t border-slate-200">
+                    <td className="p-3 text-xs font-bold text-emerald-700 sticky left-0 bg-slate-100 shadow-[1px_0_0_0_#cbd5e1]">
+                      {searchQuery ? 'Ingresos Reales (Filtrado)' : 'Totales Ingresos (Real)'}
+                    </td>
+                    <td className="p-3 text-right text-xs font-bold text-emerald-600">
+                      {filteredTotals.globalIncomeReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    </td>
+                    {filteredTotals.monthlyIncomeReal.map((v, i) => (
+                      <td key={i} className="p-3 text-right text-xs font-bold text-emerald-600">
+                        {v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                      </td>
+                    ))}
+                  </tr>
+
+                  {/* Fila Balance Neto Real (Ingresos - Gastos) */}
+                  <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-800">
+                    <td className="p-3 text-xs font-bold text-slate-100 sticky left-0 bg-slate-900 shadow-[1px_0_0_0_#334155]">
+                      Balance Neto Real (I - G)
+                    </td>
+                    <td className={`p-3 text-right text-sm font-bold ${filteredTotals.globalNetReal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {filteredTotals.globalNetReal > 0 ? '+' : ''}{filteredTotals.globalNetReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                    </td>
+                    {filteredTotals.monthlyNetReal.map((v, i) => (
+                      <td key={i} className={`p-3 text-right text-xs font-bold ${v >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {v > 0 ? '+' : ''}{v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                      </td>
                     ))}
                   </tr>
                 </tbody>

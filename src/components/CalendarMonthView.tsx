@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Payment, Concept } from '../types';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, calculatePendientes, filterPaymentsByPeriod } from '../utils/paymentUtils';
-import { formatAmount } from '../utils/formatUtils';
+import { formatAmount, getPaymentDisplayAmount } from '../utils/formatUtils';
 
 interface CalendarMonthViewProps {
   payments: Payment[];
@@ -61,7 +61,17 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
     const concept = concepts.find(c => c.id === p.conceptId);
     if (!concept) return;
 
-    if (p.status === 'PENDING_DATE') {
+    if (p.status === 'PAID') {
+      const payDate = p.actualDate ? (p.actualDate instanceof Date ? p.actualDate : new Date(p.actualDate)) : p.dueDate;
+      let day = payDate.getDate();
+      if (payDate.getMonth() !== month) {
+        day = concept.day && concept.day > 0 ? concept.day : 1;
+      }
+      if (day > daysInMonth) day = daysInMonth;
+
+      if (!gridPayments.has(day)) gridPayments.set(day, []);
+      gridPayments.get(day)!.push(p);
+    } else if (p.status === 'PENDING_DATE') {
       if (concept.dateType === 'approximate') {
         let targetDay = concept.day && concept.day > 0 ? concept.day : 1;
         if (targetDay > daysInMonth) targetDay = daysInMonth;
@@ -241,14 +251,14 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                         key={p.id}
                         onClick={() => onOpenPayment(p)}
                         className={`text-left px-1.5 py-1 rounded text-[10px] sm:text-xs truncate transition-colors hover:brightness-95 ${bgClass}`}
-                        title={`${p.concept} - ${formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}`}
+                        title={`${p.concept} - ${formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}`}
                       >
                         <span className="font-semibold block truncate">
                           {isApprox && <span className="font-normal opacity-80 mr-1">Aprox.</span>}
                           {p.concept}
                         </span>
                         <span className="block opacity-80">
-                          {formatAmount(p.expectedAmount, p.type || 'expense', isApprox)}
+                          {formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}
                         </span>
                       </button>
                     );
@@ -284,7 +294,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                     className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors"
                   >
                     <span className="font-medium text-slate-700">{p.concept}</span>
-                    <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApproxSinDia)}</span>
+                    <span className="font-semibold text-slate-900">{formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApproxSinDia)}</span>
                   </button>
                 );
               })}
@@ -308,7 +318,7 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                     className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors border border-orange-100"
                   >
                     <span className="font-medium text-slate-700">{p.concept}</span>
-                    <span className="font-semibold text-slate-900">{formatAmount(p.expectedAmount, p.type || 'expense', isApproxFP)}</span>
+                    <span className="font-semibold text-slate-900">{formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApproxFP)}</span>
                   </button>
                 );
               })}

@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Concept, Payment } from '../types';
-import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, setDoc, addDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { generateOccurrences, paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
-import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor } from '../utils/formatUtils';
+import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor, generateAutomaticCategoryColor } from '../utils/formatUtils';
+import { useData } from '../context/DataContext';
 
 interface ConceptFormProps {
   user: User | null;
@@ -14,6 +15,7 @@ interface ConceptFormProps {
 }
 
 export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps) {
+  const { customCategories } = useData();
   const [step, setStep] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -28,6 +30,12 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     };
   }, []);
 
+  // New Category Modal states
+  const [showNewCatModal, setShowNewCatModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatType, setNewCatType] = useState<'expense' | 'income' | 'both'>('expense');
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+
   // Step 1 data
   const [type, setType] = useState<Concept['type']>(initialConcept?.type || 'expense');
   const [name, setName] = useState(initialConcept?.name || '');
@@ -39,14 +47,47 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
 
   // Update color automatically when category changes
   useEffect(() => {
-    setColor(getCategoryColor(category));
-  }, [category]);
+    const customMatch = customCategories.find(c => c.name === category);
+    setColor(getCategoryColor(category, customMatch?.color));
+  }, [category, customCategories]);
 
   useEffect(() => {
     if (!initialConcept) {
       setCategory(type === 'income' ? 'Salario' : 'Suscripción');
     }
   }, [type, initialConcept]);
+
+  const handleCreateCategory = async () => {
+    const catName = newCatName.trim();
+    if (!catName) return;
+
+    const uid = auth.currentUser?.uid || user?.uid;
+    if (!uid) {
+      alert("No se detectó la sesión del usuario. Por favor vuelve a iniciar sesión.");
+      return;
+    }
+
+    const autoColor = generateAutomaticCategoryColor(catName);
+    
+    // Cierra el modal y actualiza la UI al instante
+    setCategory(catName as any);
+    setColor(autoColor);
+    setNewCatName('');
+    setShowNewCatModal(false);
+
+    // Guarda en Firestore en segundo plano
+    try {
+      await addDoc(collection(db, 'categories'), {
+        userId: uid,
+        name: catName,
+        type: newCatType,
+        color: autoColor,
+        createdAt: new Date()
+      });
+    } catch (err: any) {
+      console.error("Error saving category:", err);
+    }
+  };
 
   // Step 2 data
   const [periodicity, setPeriodicity] = useState<Concept['periodicity']>(initialConcept?.periodicity || 'monthly');
@@ -384,7 +425,17 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-slate-700">Categoría</label>
+                    <button 
+                      type="button" 
+                      onClick={() => { setNewCatType(type || 'expense'); setShowNewCatModal(true); }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                    >
+                      <span className="material-symbols-outlined text-xs">add</span>
+                      Nueva
+                    </button>
+                  </div>
                   <select 
                     value={category}
                     onChange={e => setCategory(e.target.value as Concept['category'])}
@@ -392,18 +443,34 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                   >
                     {type === 'expense' ? (
                       <>
-                    <option value="Suscripción">Suscripción</option>
-                    <option value="Impuesto">Impuesto</option>
-                    <option value="Tasa">Tasa</option>
-                    <option value="Seguro">Seguro</option>
-                    <option value="Otro">Otro</option>
+                        <option value="Suscripción">Suscripción</option>
+                        <option value="Impuesto">Impuesto</option>
+                        <option value="Tasa">Tasa</option>
+                        <option value="Seguro">Seguro</option>
+                        <option value="Hipoteca">Hipoteca</option>
+                        <option value="Préstamo">Préstamo</option>
+                        <option value="Ahorro">Ahorro</option>
+                        <option value="Otro">Otro</option>
+                        {customCategories.filter(c => c.type === 'expense' || c.type === 'both').map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                        {!['Suscripción', 'Impuesto', 'Tasa', 'Seguro', 'Hipoteca', 'Préstamo', 'Ahorro', 'Otro'].includes(category) && !customCategories.some(c => c.name === category) && category && (
+                          <option value={category}>{category}</option>
+                        )}
                       </>
                     ) : (
                       <>
-                    <option value="Salario">Salario</option>
-                    <option value="Paga Extra">Paga Extra</option>
-                    <option value="Ingreso Extra">Ingreso Extra</option>
-                    <option value="Otro">Otro</option>
+                        <option value="Salario">Salario</option>
+                        <option value="Paga Extra">Paga Extra</option>
+                        <option value="Ingreso Extra">Ingreso Extra</option>
+                        <option value="Ahorro">Ahorro</option>
+                        <option value="Otro">Otro</option>
+                        {customCategories.filter(c => c.type === 'income' || c.type === 'both').map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
+                        {!['Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'].includes(category) && !customCategories.some(c => c.name === category) && category && (
+                          <option value={category}>{category}</option>
+                        )}
                       </>
                     )}
                   </select>
@@ -609,6 +676,86 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
           )}
         </div>
       </div>
+
+      {/* MODAL NUEVA CATEGORÍA */}
+      {showNewCatModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600">category</span>
+                Nueva Categoría
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowNewCatModal(false)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre de la Categoría</label>
+                <input 
+                  type="text" 
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newCatName.trim()) handleCreateCategory(); }}
+                  placeholder="Ej. Mascotas, Viajes, Gimnasio..."
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Aplica a</label>
+                <select 
+                  value={newCatType}
+                  onChange={e => setNewCatType(e.target.value as any)}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="expense">Solo Gastos</option>
+                  <option value="income">Solo Ingresos</option>
+                  <option value="both">Ambos (Gastos e Ingresos)</option>
+                </select>
+              </div>
+
+              {newCatName.trim() && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-medium">Color asignado automáticamente:</span>
+                  <div className="flex items-center gap-2 font-bold text-slate-800">
+                    <span 
+                      className="w-4 h-4 rounded-full border shadow-sm flex-shrink-0" 
+                      style={{ backgroundColor: generateAutomaticCategoryColor(newCatName.trim()) }} 
+                    />
+                    <span className="text-[11px] text-slate-500 font-mono">{generateAutomaticCategoryColor(newCatName.trim())}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewCatModal(false)}
+                  className="flex-1 py-2.5 text-xs font-semibold border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => handleCreateCategory()}
+                  disabled={!newCatName.trim()}
+                  className="flex-1 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                >
+                  Crear Categoría
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

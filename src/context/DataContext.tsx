@@ -2,11 +2,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
-import { Payment, Concept, UserSettings } from '../types';
+import { Payment, Concept, UserSettings, CustomCategory } from '../types';
 
 interface DataContextType {
   payments: Payment[];
   concepts: Concept[];
+  customCategories: CustomCategory[];
   settings: UserSettings | null;
   loading: boolean;
 }
@@ -17,6 +18,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthorized } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,16 +26,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (!user || isAuthorized !== true) {
       setPayments([]);
       setConcepts([]);
+      setCustomCategories([]);
       setSettings(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    let loadedSources = 0;
+    let paymentsReady = false;
+    let conceptsReady = false;
+    let categoriesReady = false;
+    let settingsReady = false;
     const checkLoaded = () => {
-      loadedSources++;
-      if (loadedSources >= 3) {
+      if (paymentsReady && conceptsReady && categoriesReady && settingsReady) {
         setLoading(false);
       }
     };
@@ -55,9 +60,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } as Payment;
       });
       setPayments(data);
+      paymentsReady = true;
       checkLoaded();
     }, (error) => {
       console.error("Error fetching payments:", error);
+      paymentsReady = true;
       checkLoaded();
     });
 
@@ -77,9 +84,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } as Concept;
       });
       setConcepts(data);
+      conceptsReady = true;
       checkLoaded();
     }, (error) => {
       console.error("Error fetching concepts:", error);
+      conceptsReady = true;
+      checkLoaded();
+    });
+
+    const qCategories = query(
+      collection(db, 'categories'),
+      where('userId', '==', user.uid)
+    );
+    const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const docData = doc.data();
+        return {
+          id: doc.id,
+          ...docData,
+          createdAt: docData.createdAt?.toDate() || new Date()
+        } as CustomCategory;
+      });
+      setCustomCategories(data);
+      categoriesReady = true;
+      checkLoaded();
+    }, (error) => {
+      console.error("Error fetching categories:", error);
+      categoriesReady = true;
       checkLoaded();
     });
 
@@ -94,21 +125,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           generalNoticeDays: 5,
         });
       }
+      settingsReady = true;
       checkLoaded();
     }, (error) => {
       console.error("Error fetching settings:", error);
+      settingsReady = true;
       checkLoaded();
     });
 
     return () => {
       unsubscribePayments();
       unsubscribeConcepts();
+      unsubscribeCategories();
       unsubscribeSettings();
     };
   }, [user, isAuthorized]);
 
   return (
-    <DataContext.Provider value={{ payments, concepts, settings, loading }}>
+    <DataContext.Provider value={{ payments, concepts, customCategories, settings, loading }}>
       {children}
     </DataContext.Provider>
   );

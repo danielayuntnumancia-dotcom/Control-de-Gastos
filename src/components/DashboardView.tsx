@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Payment, Concept, UserSettings } from '../types';
-import { formatPaymentDate, MONTH_NAMES, formatAmount } from '../utils/formatUtils';
+import { formatPaymentDate, MONTH_NAMES, formatAmount, getPaymentDisplayAmount } from '../utils/formatUtils';
 import { CompactCalendar } from './CompactCalendar';
 import DailyPaymentsModal from './DailyPaymentsModal';
 import MonthPreviewModal from './MonthPreviewModal';
@@ -50,10 +50,13 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
   // 5.4 Pendientes (Count and sum of expectedAmount for pending)
   const pendienteInfo = calculatePendientes(currentMonthPayments);
 
-  // 6. Próximos Pagos
-  // Pending of current month, expired, approx dates, first of next month
-  // Exclude PAID and CANCELED
-  const upcomingPaymentsAll = payments.filter(p => p.status !== 'PAID' && p.status !== 'CANCELED' && p.status !== 'REFUNDED');
+  // 6. Próximos Gastos (Mes actual y vencidos de meses pasados, excluyendo ingresos y meses futuros)
+  const upcomingPaymentsAll = payments.filter(p => {
+    if (p.status === 'PAID' || p.status === 'CANCELED' || p.status === 'REFUNDED') return false;
+    if (p.type === 'income') return false; // Solo gastos
+    const isFuturePeriod = p.originalPeriodYear > currentYear || (p.originalPeriodYear === currentYear && p.originalPeriodMonth > currentMonth);
+    return !isFuturePeriod;
+  });
   
   // Sort: Exact expired, approx expired, future, pending dates
   const sortedUpcoming = [...upcomingPaymentsAll].sort((a, b) => {
@@ -89,31 +92,9 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
     return a.dueDate.getTime() - b.dueDate.getTime();
   });
 
-  const validUpcoming = sortedUpcoming.filter(p => {
-    // Siempre mostrar pagos vencidos, independientemente de la configuración de notificaciones
-    if (p.status === 'OVERDUE' || p.status === 'APPROX_OVERDUE') return true;
-
-    if (!settings?.notificationsEnabled) return false;
-
-    const concept = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
-    const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
-    
-    if (p.status === 'PENDING_DATE') return true;
-    if (concept?.dateType === 'month_only') {
-      return now >= p.dueDate;
-    }
-
-    const noticeDays = concept?.exceptionNoticeDays !== undefined && concept?.exceptionNoticeDays !== null 
-      ? concept.exceptionNoticeDays 
-      : (settings?.generalNoticeDays ?? 5);
-
-    const noticeDate = new Date(p.dueDate);
-    noticeDate.setDate(noticeDate.getDate() - noticeDays);
-
-    return now >= noticeDate || p.dueDate < now;
-  });
-
-  const nextPaymentsToShow = validUpcoming.slice(0, 7); // Up to 7 items
+  const validUpcoming = sortedUpcoming;
+  const nextPaymentsToShow = validUpcoming;
+  const totalUpcomingPendingExpenses = validUpcoming.reduce((sum, p) => sum + (getPaymentDisplayAmount(p) || 0), 0) / 100;
 
   if (concepts.length === 0 && payments.length === 0) {
     return (
@@ -194,19 +175,24 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
       {/* 6. Próximos Pagos and 7. Calendario (Layout split) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Próximos pagos */}
+        {/* Próximos gastos */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
-          <div className="px-4 md:px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-            <h2 className="font-semibold text-slate-800">Próximos Pagos</h2>
+          <div className="px-4 md:px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <h2 className="font-semibold text-slate-800">Próximos Gastos</h2>
+              <span className="text-xs font-bold text-orange-600 bg-orange-50 border border-orange-200/60 px-2.5 py-1 rounded-full">
+                Pendiente: {totalUpcomingPendingExpenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              </span>
+            </div>
             <button onClick={onNavigateToCalendar} className="text-xs font-medium text-indigo-600 hover:text-indigo-800">
               Ver todos
             </button>
           </div>
           
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 flex-1">
             {nextPaymentsToShow.length === 0 ? (
               <div className="p-8 text-center text-slate-500">
-                <p>No hay pagos próximos pendientes.</p>
+                <p>No hay gastos próximos pendientes.</p>
               </div>
             ) : (
               nextPaymentsToShow.map(p => {
@@ -234,7 +220,7 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
                     </div>
                     <div className="text-right">
                       <p className="font-semibold text-slate-900">
-                        {formatAmount(p.expectedAmount, p.type || 'expense', p.isAmountApproximate)}
+                        {formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', p.isAmountApproximate)}
                       </p>
                       {concept?.category && (
                         <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">{concept.category}</p>
@@ -245,6 +231,15 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
               })
             )}
           </div>
+
+          {validUpcoming.length > 0 && (
+            <div className="p-4 bg-slate-50/80 border-t border-slate-200 flex justify-between items-center text-xs font-medium text-slate-600 mt-auto">
+              <span>Total gastos pendientes este mes ({validUpcoming.length}):</span>
+              <span className="text-sm font-bold text-orange-600">
+                {totalUpcomingPendingExpenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-6">
@@ -257,31 +252,6 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
             onOpenPayment={onOpenPayment}
             onOpenDay={setSelectedDayDate}
           />
-
-          {/* Resumen mes siguiente */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden">
-            <div className="px-4 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-800 text-sm">Avance {MONTH_NAMES[currentMonth === 11 ? 0 : currentMonth + 1]}</h2>
-              <button 
-                onClick={() => setPreviewMonthDate({ month: currentMonth === 11 ? 0 : currentMonth + 1, year: currentMonth === 11 ? currentYear + 1 : currentYear })} 
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
-              >
-                Ver mes
-              </button>
-            </div>
-            <div className="p-4 md:p-6 flex-1 flex flex-col justify-center items-center text-center">
-              {nextMonthPayments.length > 0 ? (
-                <>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {(calculateTotalPrevisto(nextMonthPayments).net).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-2">Previsto en {nextMonthPayments.filter(p => p.status !== 'CANCELED').length} cobros</p>
-                </>
-              ) : (
-                <p className="text-slate-500 text-sm">Aún no hay vencimientos generados para el mes siguiente.</p>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { User } from 'firebase/auth';
 import { UserSettings, Payment, Concept } from '../types';
 import { db } from '../lib/firebase';
-import { doc, setDoc, serverTimestamp, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, serverTimestamp, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { generateAnnualPayments } from '../utils/paymentGenerator';
 import { syncAllConceptPayments } from '../utils/paymentUtils';
+import { useData } from '../context/DataContext';
 import packageJson from '../../package.json';
 
 interface SettingsViewProps {
@@ -16,6 +17,7 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({ user, settings, payments, concepts, onLogout }: SettingsViewProps) {
+  const { customCategories } = useData();
   // Configuración
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -291,6 +293,56 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
           </div>
         </div>
       </section>
+
+      {/* Categorías Personalizadas */}
+      {customCategories.length > 0 && (
+        <section className="bg-white border border-slate-200 rounded-xl shadow-sm">
+          <div className="p-4 md:p-6 border-b border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-600">category</span>
+              Categorías Personalizadas
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">Gestión de las categorías adicionales creadas para tus ingresos y gastos.</p>
+          </div>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {customCategories.map(cat => {
+                const handleDeleteCat = async (catId: string, catName: string) => {
+                  if (window.confirm(`¿Seguro que deseas eliminar la categoría "${catName}"?`)) {
+                    try {
+                      await deleteDoc(doc(db, 'categories', catId));
+                    } catch (err) {
+                      console.error("Error deleting category:", err);
+                      alert("No se pudo eliminar la categoría.");
+                    }
+                  }
+                };
+
+                return (
+                  <div key={cat.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <span className="w-4 h-4 rounded-full border shadow-sm flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      <div className="truncate">
+                        <p className="text-sm font-bold text-slate-800 truncate">{cat.name}</p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {cat.type === 'expense' ? 'Gastos' : cat.type === 'income' ? 'Ingresos' : 'Gastos e Ingresos'}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteCat(cat.id, cat.name)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                      title="Eliminar categoría"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* 3. Cuenta */}
       <section className="bg-white border border-slate-200 rounded-xl shadow-sm">

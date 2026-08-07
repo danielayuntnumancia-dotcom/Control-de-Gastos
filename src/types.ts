@@ -3,7 +3,7 @@ export interface Concept {
   userId: string;
   name: string;
   type?: 'expense' | 'income';
-  category: 'Suscripción' | 'Impuesto' | 'Tasa' | 'Seguro' | 'Salario' | 'Paga Extra' | 'Ingreso Extra' | 'Otro';
+  category: 'Suscripción' | 'Impuesto' | 'Tasa' | 'Seguro' | 'Hipoteca' | 'Préstamo' | 'Salario' | 'Paga Extra' | 'Ingreso Extra' | 'Ahorro' | 'Otro';
   description?: string;
   expectedAmount: number; // in cents
   amountType?: 'exact' | 'approximate';
@@ -56,4 +56,13 @@ export interface PriceVersion {
   validTo?: Date | null;
   createdAt: Date;
   note?: string;
+}
+
+export interface CustomCategory {
+  id: string;
+  userId: string;
+  name: string;
+  type: 'expense' | 'income' | 'both';
+  color: string;
+  createdAt: Date;
 }

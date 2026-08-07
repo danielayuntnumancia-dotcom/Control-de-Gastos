@@ -1,6 +1,6 @@
 import React from 'react';
 import { Payment, Concept } from '../types';
-import { formatAmount } from '../utils/formatUtils';
+import { formatAmount, getPaymentDisplayAmount } from '../utils/formatUtils';
 
 interface CompactCalendarProps {
   payments: Payment[];
@@ -34,7 +34,12 @@ export function CompactCalendar({ payments, concepts, currentMonth, currentYear,
     
     const concept = concepts.find(c => c.id === p.conceptId);
     
-    if (p.status === 'PENDING_DATE') {
+    if (p.status === 'PAID') {
+      const payDate = p.actualDate ? (p.actualDate instanceof Date ? p.actualDate : new Date(p.actualDate)) : p.dueDate;
+      const day = payDate.getDate();
+      if (!paymentsByDay.has(day)) paymentsByDay.set(day, []);
+      paymentsByDay.get(day)!.push(p);
+    } else if (p.status === 'PENDING_DATE') {
       if (concept?.dateType === 'approximate') {
         const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
         for (let d = targetDay - 1; d <= targetDay + 1; d++) {
@@ -117,7 +122,7 @@ export function CompactCalendar({ payments, concepts, currentMonth, currentYear,
                 >
                   <span className="text-slate-700 truncate mr-2">{p.concept}</span>
                   <span className="font-medium text-slate-900 shrink-0">
-                    {formatAmount(p.expectedAmount, p.type || 'expense', false)}
+                    {formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', false)}
                   </span>
                 </button>
               ))}

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Payment, Concept } from '../types';
 import { filterPaymentsByPeriod } from '../utils/paymentUtils';
+import { getPaymentDisplayAmount } from '../utils/formatUtils';
 
 interface CalendarListViewProps {
   payments: Payment[];
@@ -40,6 +41,11 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
 
     if (p.isDelayed) {
       aplazados.push(p);
+    } else if (p.status === 'PAID') {
+      const payDate = p.actualDate ? (p.actualDate instanceof Date ? p.actualDate : new Date(p.actualDate)) : p.dueDate;
+      const day = payDate.getDate();
+      if (!exactDates.has(day)) exactDates.set(day, []);
+      exactDates.get(day)!.push(p);
     } else if (concept.dateType === 'approximate') {
       const targetDay = concept.day && concept.day > 0 ? concept.day : 1;
       if (!approxDates.has(targetDay)) approxDates.set(targetDay, []);
@@ -89,13 +95,13 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
             <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${statusClass}`}>
               {statusText}
             </span>
-            <span className="font-bold text-slate-900 w-20 text-right">
-              {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+            <span className="font-bold text-slate-900 w-24 text-right">
+              {(getPaymentDisplayAmount(p) / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
             </span>
           </div>
-          {p.status === 'PAID' && p.actualAmount !== null && p.actualAmount !== p.expectedAmount && (
-            <span className="text-xs text-slate-500">
-              Real: {(p.actualAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+          {p.actualAmount !== null && p.actualAmount !== undefined && p.actualAmount !== p.expectedAmount && (
+            <span className="text-[11px] text-slate-400">
+              Previsto: {(p.expectedAmount / 100).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
             </span>
           )}
         </div>

@@ -82,15 +82,36 @@ export async function syncAllConceptPayments(userUid: string, concepts: Concept[
     const pMonth = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : (data.dueDate?.toDate ? data.dueDate.toDate().getMonth() : new Date(data.dueDate).getMonth());
     existingMap.add(`${data.conceptId}_${pYear}_${pMonth}`);
 
-    // Retroactive repair: if payment was PAID and dueDate got changed to a different month than originalPeriod, fix dueDate
-    if (data.status === 'PAID' && data.originalPeriodYear !== undefined && data.originalPeriodMonth !== undefined) {
+    // Retroactive repair: if payment was PAID and actualDate/dueDate got altered, restore them to scheduled period date
+    if (data.status === 'PAID') {
       const pDueDate = data.dueDate?.toDate ? data.dueDate.toDate() : new Date(data.dueDate);
-      if (pDueDate.getMonth() !== data.originalPeriodMonth || pDueDate.getFullYear() !== data.originalPeriodYear) {
+      const pActualDate = data.actualDate?.toDate ? data.actualDate.toDate() : (data.actualDate ? new Date(data.actualDate) : null);
+      
+      let needsRepair = false;
+      let targetDate = pDueDate;
+
+      if (!data.isDelayed && data.originalPeriodYear !== undefined && data.originalPeriodMonth !== undefined) {
         const c = conceptsMap.get(data.conceptId);
         const targetDay = c && c.day && c.day > 0 ? c.day : (pDueDate.getDate() || 1);
-        const restoredDate = new Date(data.originalPeriodYear, data.originalPeriodMonth, targetDay);
-        batch.update(d.ref, { dueDate: restoredDate });
-        totalCreated++; // count updates as work done
+        targetDate = new Date(data.originalPeriodYear, data.originalPeriodMonth, targetDay);
+        
+        if (pDueDate.getTime() !== targetDate.getTime()) {
+          needsRepair = true;
+        }
+      }
+
+      if (!data.isDelayed && pActualDate) {
+        if (pActualDate.getTime() !== targetDate.getTime()) {
+          needsRepair = true;
+        }
+      }
+
+      if (needsRepair) {
+        batch.update(d.ref, { 
+          dueDate: targetDate,
+          actualDate: targetDate
+        });
+        totalCreated++;
       }
     }
   });

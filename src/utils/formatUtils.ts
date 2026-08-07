@@ -53,22 +53,42 @@ export function formatPaymentDate(payment: Payment, concept?: Concept) {
   }
 }
 
-export function getCategoryColor(category: string): string {
+export function generateAutomaticCategoryColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 48%)`;
+}
+
+export function getCategoryColor(category: string, customColor?: string): string {
+  if (customColor) return customColor;
   switch (category) {
     case 'Suscripción': return '#6366f1'; // Indigo 500
     case 'Impuesto': return '#ef4444'; // Red 500
     case 'Tasa': return '#f59e0b'; // Amber 500
     case 'Seguro': return '#10b981'; // Emerald 500
+    case 'Hipoteca': return '#8b5cf6'; // Purple 500
+    case 'Préstamo': return '#ec4899'; // Pink 500
     case 'Salario': return '#22c55e'; // Green 500
     case 'Paga Extra': return '#16a34a'; // Green 600
     case 'Ingreso Extra': return '#4ade80'; // Green 400
+    case 'Ahorro': return '#3b82f6'; // Blue 500
     case 'Otro': return '#64748b'; // Slate 500
-    default: return '#64748b';
+    default: return generateAutomaticCategoryColor(category);
   }
 }
 
 export function getConceptColor(concept: { color?: string, category: string }): string {
   return getCategoryColor(concept.category);
+}
+
+export function getPaymentDisplayAmount(payment: { actualAmount?: number | null, expectedAmount: number }): number {
+  if (payment.actualAmount !== null && payment.actualAmount !== undefined) {
+    return payment.actualAmount;
+  }
+  return payment.expectedAmount;
 }
 
 export function formatAmount(cents: number, type: 'expense' | 'income' = 'expense', isApproximate: boolean = false): string {
