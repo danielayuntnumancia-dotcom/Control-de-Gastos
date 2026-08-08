@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Control de Gastos</string>
+    <string name="title_activity_main">Control de Gastos</string>
+    <string name="package_name">com.ayuntnumancia.controldegastos</string>
+    <string name="custom_url_scheme">com.ayuntnumancia.controldegastos</string>
+</resources>

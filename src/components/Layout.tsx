@@ -9,6 +9,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -79,32 +80,39 @@ export function Layout() {
               <span className="text-[10px] md:text-base">Conceptos</span>
             </NavLink>
             <NavLink 
-              to="/importar"
+              to="/resumen"
               className={({ isActive }) => `flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 px-2 md:px-4 py-2 md:py-3 rounded-lg transition-colors flex-1 md:w-full ${isActive ? 'md:bg-indigo-600 text-indigo-400 md:text-white' : 'hover:bg-slate-800'}`}
             >
-              <span className="material-symbols-outlined text-[24px] md:text-[20px]">upload_file</span>
-              <span className="text-[10px] md:text-base">Importar</span>
+              <span className="material-symbols-outlined text-[24px] md:text-[20px]">bar_chart</span>
+              <span className="text-[10px] md:text-base">Resumen</span>
             </NavLink>
 
-            <div className="relative flex-1 md:w-full md:hidden flex justify-center group"> 
-               {/* Mobile "Más" menu */}
-               <button className="flex flex-col md:hidden items-center justify-center gap-1 px-2 py-2 text-slate-300 hover:text-white w-full rounded-lg">
+            <div className="relative flex-1 md:w-full md:hidden flex justify-center"> 
+               <button 
+                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                 className={`flex flex-col items-center justify-center gap-1 px-2 py-2 text-slate-300 hover:text-white w-full rounded-lg ${isMobileMenuOpen ? 'text-white' : ''}`}
+               >
                  <span className="material-symbols-outlined text-[24px]">more_horiz</span>
                  <span className="text-[10px]">Más</span>
                </button>
-               <div className="absolute bottom-full right-2 mb-2 w-48 bg-slate-800 rounded-lg shadow-xl hidden group-hover:block overflow-hidden">
-                 <button onClick={() => navigate('/resumen')} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700">Resumen Anual</button>
-                 <button onClick={() => navigate('/configuracion')} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700">Configuración</button>
-                 <button onClick={logout} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 border-t border-slate-700">Cerrar sesión</button>
-               </div>
+               {isMobileMenuOpen && (
+                 <>
+                   <div className="fixed inset-0 z-40" onClick={() => setIsMobileMenuOpen(false)}></div>
+                   <div className="absolute bottom-full right-2 mb-2 w-48 bg-slate-800 rounded-lg shadow-xl z-50 overflow-hidden">
+                     <button onClick={() => { setIsMobileMenuOpen(false); navigate('/importar'); }} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700">Importar</button>
+                     <button onClick={() => { setIsMobileMenuOpen(false); navigate('/configuracion'); }} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700">Configuración</button>
+                     <button onClick={() => { setIsMobileMenuOpen(false); logout(); }} className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 border-t border-slate-700">Cerrar sesión</button>
+                   </div>
+                 </>
+               )}
             </div>
             
             <NavLink 
-              to="/resumen"
+              to="/importar"
               className={({ isActive }) => `hidden md:flex flex-row items-center justify-start gap-3 px-4 py-3 rounded-lg transition-colors w-full ${isActive ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}
             >
-              <span className="material-symbols-outlined text-[20px]">bar_chart</span>
-              <span className="text-base">Resumen Anual</span>
+              <span className="material-symbols-outlined text-[20px]">upload_file</span>
+              <span className="text-base">Importar</span>
             </NavLink>
             <NavLink 
               to="/configuracion"

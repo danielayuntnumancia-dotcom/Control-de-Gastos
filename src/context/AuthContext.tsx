@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, AuthErrorCodes } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut, AuthErrorCodes } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -74,7 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     
     try {
-      await signInWithPopup(auth, provider);
+      if (Capacitor.isNativePlatform()) {
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        if (result.credential?.idToken) {
+          const credential = GoogleAuthProvider.credential(result.credential.idToken);
+          await signInWithCredential(auth, credential);
+        } else {
+          throw new Error('No se pudo obtener el token de Google');
+        }
+      } else {
+        await signInWithPopup(auth, provider);
+      }
     } catch (error: any) {
       console.error("Login error:", error);
       if (error.code === AuthErrorCodes.POPUP_CLOSED_BY_USER) {
