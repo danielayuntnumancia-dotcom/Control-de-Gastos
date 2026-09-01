@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Payment, Concept } from '../types';
 import { filterPaymentsByPeriod } from '../utils/paymentUtils';
 import { getPaymentDisplayAmount } from '../utils/formatUtils';
+import { useData } from '../context/DataContext';
 
 interface CalendarListViewProps {
   payments: Payment[];
@@ -16,6 +17,7 @@ interface CalendarListViewProps {
 }
 
 export function CalendarListView({ payments, concepts, month, year, onPrevMonth, onNextMonth, onToday, onOpenPayment, isFiltered }: CalendarListViewProps) {
+  const { accounts } = useData();
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   
   const currentPeriodPayments = filterPaymentsByPeriod(payments, month, year);
@@ -66,6 +68,7 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
 
   const renderPaymentRow = (p: Payment) => {
     const concept = concepts.find(c => c.id === p.conceptId);
+    const paymentAccount = accounts.find(a => a.id === (p.accountId || concept?.accountId));
     let statusClass = "text-slate-600 bg-slate-100";
     let statusText: string = p.status;
     
@@ -83,7 +86,18 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
       >
         <div className="flex flex-col">
           <span className="font-semibold text-slate-800">{p.concept}</span>
-          <span className="text-xs text-slate-500 mt-0.5">{concept?.category || 'Sin categoría'}</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-xs text-slate-500">{concept?.category || 'Sin categoría'}</span>
+            {paymentAccount && (
+              <span 
+                className="inline-flex items-center gap-0.5 px-2 py-0.2 rounded-full text-[10px] font-semibold text-white shadow-2xs"
+                style={{ backgroundColor: paymentAccount.color }}
+              >
+                <span className="material-symbols-outlined text-[10px]">account_balance</span>
+                {paymentAccount.name}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-3">

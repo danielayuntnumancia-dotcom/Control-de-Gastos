@@ -3,6 +3,7 @@ import { Payment, Concept } from '../types';
 import { formatPaymentDate, MONTH_NAMES, formatAmount } from '../utils/formatUtils';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { useData } from '../context/DataContext';
 
 interface PaymentDetailsPanelProps {
   payment: Payment;
@@ -13,7 +14,7 @@ interface PaymentDetailsPanelProps {
 type ActionState = 'view' | 'pay' | 'correct' | 'delay' | 'resolve_date' | 'cancel' | 'saving' | 'error';
 
 export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetailsPanelProps) {
-  
+  const { accounts } = useData();
   
   const [actionState, setActionState] = useState<ActionState>('view');
   const [errorMessage, setErrorMessage] = useState('');
@@ -29,6 +30,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [delayedMark, setDelayedMark] = useState(false);
+  const [accountId, setAccountId] = useState<string>(payment.accountId || concept?.accountId || '');
   const [description, setDescription] = useState(payment.description || '');
 
   useEffect(() => {
@@ -49,9 +51,10 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       const e = payment.dueDate;
       setEffectiveDate(`${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`);
       setDelayedMark(payment.isDelayed === true);
+      setAccountId(payment.accountId || concept?.accountId || '');
       setDescription(payment.description || '');
     }
-  }, [payment, actionState]);
+  }, [payment, concept, actionState]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -122,6 +125,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       actualAmount: Math.round(amt * 100),
       actualDate: updatedDate,
       dueDate: updatedDate,
+      accountId: accountId || null,
       description: description.trim()
     }, actionState);
   };
@@ -130,13 +134,6 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
     const [y, m, d] = effectiveDate.split('-').map(Number);
     const newDueDate = new Date(y, m - 1, d);
 
-    // If it's delayed to another month, status is actually just whatever it normally is (e.g. PENDING).
-    // Or if it was OVERDUE before... wait, if they change the date to the future, it becomes PENDING!
-    // If they change it to the past, it might become OVERDUE again.
-    // For simplicity, we can just say it is PENDING, because they just changed the effective date to a new one.
-    // Or we compute it like in submitRestoreDate. Let's just set it to PENDING and let other processes (or here) figure it out if it's strictly in the past.
-    // Given the prompt: "transiciones: cualquier vencimiento no cancelado -> aplazado mediante fecha efectiva". Let's set PENDING and isDelayed.
-    
     const today = new Date();
     today.setHours(0,0,0,0);
     let newStatus: Payment['status'] = 'PENDING';
@@ -149,6 +146,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       status: newStatus,
       isDelayed: delayedMark,
       dueDate: newDueDate,
+      accountId: accountId || null,
       description: description.trim()
     }, actionState);
   };
@@ -203,6 +201,9 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
     }, actionState);
   };
 
+  const effectiveAccountId = payment.accountId || concept?.accountId;
+  const assignedAccount = accounts.find(a => a.id === effectiveAccountId);
+
   return (
     <>
       <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 transition-opacity" onClick={onClose}></div>
@@ -223,9 +224,24 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 {statusText}
               </span>
             </div>
-            <p className="text-sm font-medium text-indigo-600 bg-indigo-50 inline-block px-2 py-0.5 rounded">
-              {concept?.category || 'Sin categoría'}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-indigo-600 bg-indigo-50 inline-block px-2 py-0.5 rounded">
+                {concept?.category || 'Sin categoría'}
+              </p>
+              {assignedAccount ? (
+                <span 
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-xs"
+                  style={{ backgroundColor: assignedAccount.color }}
+                >
+                  <span className="material-symbols-outlined text-[14px]">account_balance</span>
+                  {assignedAccount.name}
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                  Sin cuenta
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -341,7 +357,6 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 {proposedDates.length > 0 && (
                   <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
                     {proposedDates.map(d => {
-                      // Usar formato YYYY-MM-DD correcto localmente
                       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                       const isSelected = actualDate === dateStr;
                       return (
@@ -367,6 +382,23 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria (Cobro / Pago)</label>
+                <select
+                  value={accountId}
+                  onChange={e => setAccountId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="">Sin cuenta asignada</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Observaciones (Opcional)</label>
                 <textarea 
@@ -428,6 +460,22 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                   }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria</label>
+                <select
+                  value={accountId}
+                  onChange={e => setAccountId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="">Sin cuenta asignada</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               
               {delayedMark && (

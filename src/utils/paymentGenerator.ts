@@ -12,6 +12,7 @@ export function generateAnnualPayments(concepts: Concept[], year: number): Omit<
     for (const occ of occurrences) {
       newPayments.push({
         conceptId: concept.id,
+        accountId: concept.accountId || undefined,
         concept: concept.name,
         expectedAmount: concept.expectedAmount,
         actualAmount: null,

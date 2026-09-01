@@ -5,7 +5,7 @@ import { auth, db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { generateOccurrences, paramsFromConcept, computeDueDateAndStatus } from '../utils/occurrenceEngine';
-import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor, generateAutomaticCategoryColor } from '../utils/formatUtils';
+import { MONTH_NAMES_SHORT, getCategoryColor, getConceptColor, generateAutomaticCategoryColor, generateAutomaticAccountColor } from '../utils/formatUtils';
 import { useData } from '../context/DataContext';
 
 interface ConceptFormProps {
@@ -15,7 +15,7 @@ interface ConceptFormProps {
 }
 
 export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps) {
-  const { customCategories } = useData();
+  const { customCategories, accounts } = useData();
   const [step, setStep] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -36,14 +36,35 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   const [newCatType, setNewCatType] = useState<'expense' | 'income' | 'both'>('expense');
   const [isSavingCategory, setIsSavingCategory] = useState(false);
 
+  // New Account Modal states
+  const [showNewAccModal, setShowNewAccModal] = useState(false);
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccColor, setNewAccColor] = useState('#2563eb');
+  const [newAccIsDefault, setNewAccIsDefault] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+
   // Step 1 data
   const [type, setType] = useState<Concept['type']>(initialConcept?.type || 'expense');
   const [name, setName] = useState(initialConcept?.name || '');
   const [category, setCategory] = useState<Concept['category']>(initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : 'Suscripción'));
+  const [accountId, setAccountId] = useState<string>(() => {
+    if (initialConcept?.accountId) return initialConcept.accountId;
+    if (!initialConcept) {
+      const defaultAcc = accounts.find(a => a.isDefault);
+      return defaultAcc ? defaultAcc.id : '';
+    }
+    return '';
+  });
   const [description, setDescription] = useState(initialConcept?.description || '');
   const [amountStr, setAmountStr] = useState(initialConcept ? (initialConcept.expectedAmount / 100).toString() : '');
   const [amountType, setAmountType] = useState<Concept['amountType']>(initialConcept?.amountType || 'exact');
   const [color, setColor] = useState(initialConcept ? getConceptColor(initialConcept) : getCategoryColor('Suscripción'));
+
+  // Edit mode options for account reassignment
+  const [applyAccountChangesFromMonth, setApplyAccountChangesFromMonth] = useState<number>(new Date().getMonth());
+  const [applyAccountChangesFromYear, setApplyAccountChangesFromYear] = useState<number>(new Date().getFullYear());
+  
+  const hasAccountChanged = initialConcept && initialConcept.accountId !== accountId;
 
   // Update color automatically when category changes
   useEffect(() => {
@@ -89,6 +110,54 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     }
   };
 
+  const handleCreateAccountInline = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const accName = newAccName.trim();
+    if (!accName) return;
+
+    const uid = auth.currentUser?.uid || user?.uid;
+    if (!uid) {
+      alert("No se detectó la sesión del usuario. Por favor vuelve a iniciar sesión.");
+      return;
+    }
+
+    setIsSavingAccount(true);
+    try {
+      const batch = writeBatch(db);
+      const newAccRef = doc(collection(db, 'accounts'));
+
+      if (newAccIsDefault) {
+        accounts.forEach(acc => {
+          if (acc.isDefault) {
+            batch.update(doc(db, 'accounts', acc.id), { isDefault: false });
+          }
+        });
+      }
+
+      batch.set(newAccRef, {
+        userId: uid,
+        name: accName,
+        color: newAccColor || generateAutomaticAccountColor(accName),
+        isDefault: newAccIsDefault || accounts.length === 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await batch.commit();
+
+      setAccountId(newAccRef.id);
+      setNewAccName('');
+      setNewAccColor('#2563eb');
+      setNewAccIsDefault(false);
+      setShowNewAccModal(false);
+    } catch (err) {
+      console.error("Error creating account:", err);
+      alert("No se pudo crear la cuenta bancaria.");
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
   // Step 2 data
   const [periodicity, setPeriodicity] = useState<Concept['periodicity']>(initialConcept?.periodicity || 'monthly');
   const [dateType, setDateType] = useState<Concept['dateType']>(initialConcept?.dateType || 'exact');
@@ -105,6 +174,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       type !== (initialConcept?.type || 'expense') ||
       name !== (initialConcept?.name || '') ||
       category !== (initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : 'Suscripción')) ||
+      accountId !== (initialConcept?.accountId || '') ||
       description !== (initialConcept?.description || '') ||
       amountStr !== (initialConcept ? (initialConcept.expectedAmount / 100).toString() : '') ||
       amountType !== (initialConcept?.amountType || 'exact') ||
@@ -118,7 +188,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       active !== (initialConcept ? initialConcept.active : true) ||
       exceptionNoticeDays !== (initialConcept?.exceptionNoticeDays ?? '')
     );
-  }, [type, name, category, description, amountStr, amountType, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
+  }, [type, name, category, accountId, description, amountStr, amountType, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
 
   useUnsavedChangesWarning(isDirty && !isSubmitting);
 
@@ -224,6 +294,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         name: name.trim(),
         type: type || 'expense',
         category,
+        accountId: accountId || undefined,
         description,
         expectedAmount: amountCents,
         amountType: amountType,
@@ -290,6 +361,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
             batch.set(occRef, {
               userId: user.uid,
               conceptId: conceptRef.id,
+              accountId: conceptData.accountId || null,
               concept: conceptData.name,
               type: conceptData.type,
               expectedAmount: amountCents,
@@ -305,7 +377,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
           }
         }
       } else if (isEdit && !ruleChanged) {
-        // If we just edited basic details, update the pending future occurrences so they have the new name/amount
+        // If we just edited basic details, update the pending future occurrences so they have the new name/amount/account
         const now = new Date();
         now.setHours(0,0,0,0);
         const q = query(
@@ -325,15 +397,17 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
             if (data.status === 'PENDING' || data.status === 'PENDING_DATE') {
               batch.update(d.ref, { 
                 concept: conceptData.name,
+                accountId: conceptData.accountId || null,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate',
                 status: 'CANCELED' 
               });
             } else if (dueDate >= now) {
-              // It's already canceled, just update name/amount
+              // It's already canceled, just update name/amount/account
               batch.update(d.ref, {
                 concept: conceptData.name,
+                accountId: conceptData.accountId || null,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate'
@@ -348,21 +422,47 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               const month = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : dueDate.getMonth();
               const { status } = computeDueDateAndStatus(year, month, params);
               
+              const paymentDateForComparison = new Date(year, month, 1);
+              const targetDate = hasAccountChanged 
+                ? new Date(applyAccountChangesFromYear, applyAccountChangesFromMonth, 1)
+                : now;
+              
+              const newAccountId = (hasAccountChanged && paymentDateForComparison >= targetDate) || (!hasAccountChanged && dueDate >= now)
+                ? (conceptData.accountId || null)
+                : data.accountId;
+
               batch.update(d.ref, {
                 concept: conceptData.name,
+                accountId: newAccountId,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate',
                 status: status
               });
-            } else if (dueDate >= now) {
-              // Just update name/amount
-              batch.update(d.ref, {
-                concept: conceptData.name,
-                type: conceptData.type,
-                expectedAmount: amountCents,
-                isAmountApproximate: conceptData.amountType === 'approximate'
-              });
+            } else if (dueDate >= now || hasAccountChanged) {
+              const year = data.originalPeriodYear !== undefined ? data.originalPeriodYear : dueDate.getFullYear();
+              const month = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : dueDate.getMonth();
+              const paymentDateForComparison = new Date(year, month, 1);
+              const targetDate = hasAccountChanged 
+                ? new Date(applyAccountChangesFromYear, applyAccountChangesFromMonth, 1)
+                : now;
+
+              const shouldUpdateGeneral = dueDate >= now;
+              const shouldUpdateAccount = hasAccountChanged && paymentDateForComparison >= targetDate;
+
+              if (shouldUpdateGeneral || shouldUpdateAccount) {
+                const updates: any = {};
+                if (shouldUpdateGeneral) {
+                  updates.concept = conceptData.name;
+                  updates.type = conceptData.type;
+                  updates.expectedAmount = amountCents;
+                  updates.isAmountApproximate = conceptData.amountType === 'approximate';
+                }
+                if (shouldUpdateAccount) {
+                  updates.accountId = conceptData.accountId || null;
+                }
+                batch.update(d.ref, updates);
+              }
             }
           }
         });
@@ -479,7 +579,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                   <label className="block text-sm font-medium text-slate-700 mb-1">Importe Previsto (€)</label>
                   <input 
                     type="number" 
-                    step="0.01"
+                    step="0.01" 
                     value={amountStr}
                     onChange={e => setAmountStr(e.target.value)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
@@ -487,6 +587,67 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-medium text-slate-700">Cuenta Bancaria (Cobro / Ingreso)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setNewAccName('');
+                      setNewAccColor('#2563eb');
+                      setNewAccIsDefault(accounts.length === 0);
+                      setShowNewAccModal(true);
+                    }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                  >
+                    <span className="material-symbols-outlined text-xs">add</span>
+                    Nueva cuenta
+                  </button>
+                </div>
+                <div className="relative">
+                  <select
+                    value={accountId}
+                    onChange={e => setAccountId(e.target.value)}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
+                  >
+                    <option value="">Sin cuenta asignada</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {hasAccountChanged && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-fade-in-up">
+                    <p className="text-xs text-blue-800 font-medium mb-2">
+                      Has cambiado la cuenta bancaria. ¿Desde qué mes quieres aplicar este cambio a los pagos pendientes?
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={applyAccountChangesFromMonth}
+                        onChange={(e) => setApplyAccountChangesFromMonth(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                      >
+                        {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
+                          <option key={i} value={i}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={applyAccountChangesFromYear}
+                        onChange={(e) => setApplyAccountChangesFromYear(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                      >
+                        {Array.from({ length: 5 }).map((_, i) => {
+                          const y = new Date().getFullYear() - 2 + i;
+                          return <option key={y} value={y}>{y}</option>;
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -503,8 +664,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                 <div className="flex items-center gap-3">
                   <input 
                     type="number" 
-                    min="0"
-                    max="365"
+                    min="0" 
+                    max="365" 
                     value={exceptionNoticeDays}
                     onChange={e => setExceptionNoticeDays(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-24 px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
@@ -753,6 +914,99 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL NUEVA CUENTA BANCARIA INLINE */}
+      {showNewAccModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600">account_balance</span>
+                Nueva Cuenta Bancaria
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowNewAccModal(false)} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccountInline} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nombre de la Cuenta *</label>
+                <input 
+                  type="text" 
+                  required
+                  value={newAccName}
+                  onChange={e => {
+                    setNewAccName(e.target.value);
+                    if (!newAccColor || newAccColor === '#2563eb') {
+                      setNewAccColor(generateAutomaticAccountColor(e.target.value));
+                    }
+                  }}
+                  placeholder="Ej. BBVA Principal, Santander, Efectivo..."
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color distintivo</label>
+                <div className="flex items-center gap-2 mb-1">
+                  {['#2563eb', '#059669', '#dc2626', '#7c3aed', '#d97706', '#0891b2', '#db2777', '#475569'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewAccColor(c)}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${newAccColor === c ? 'border-slate-800 scale-110 shadow-xs' : 'border-white hover:scale-105'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={newAccColor}
+                    onChange={(e) => setNewAccColor(e.target.value)}
+                    className="w-6 h-6 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
+                    title="Color personalizado"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newAccIsDefault}
+                    onChange={(e) => setNewAccIsDefault(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                  />
+                  <span className="text-xs font-medium text-slate-700">Marcar como predeterminada</span>
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewAccModal(false)}
+                  className="flex-1 py-2.5 text-xs font-semibold border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSavingAccount || !newAccName.trim()}
+                  className="flex-1 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {isSavingAccount ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : null}
+                  Crear Cuenta
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

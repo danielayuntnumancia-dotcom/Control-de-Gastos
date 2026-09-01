@@ -146,6 +146,7 @@ export async function syncAllConceptPayments(userUid: string, concepts: Concept[
         batch.set(occRef, {
           userId: userUid,
           conceptId: concept.id,
+          accountId: concept.accountId || null,
           concept: concept.name,
           type: concept.type || 'expense',
           expectedAmount: concept.expectedAmount,

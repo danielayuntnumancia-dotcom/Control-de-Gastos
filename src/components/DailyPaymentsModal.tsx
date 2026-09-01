@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Payment, Concept } from '../types';
 import { formatPaymentDate, MONTH_NAMES_SHORT, MONTH_NAMES, formatAmount, getPaymentDisplayAmount } from '../utils/formatUtils';
+import { useData } from '../context/DataContext';
 
 interface DailyPaymentsModalProps {
   initialDate: Date;
@@ -11,6 +12,7 @@ interface DailyPaymentsModalProps {
 }
 
 export default function DailyPaymentsModal({ initialDate, payments, concepts, onClose, onOpenPayment }: DailyPaymentsModalProps) {
+  const { accounts } = useData();
   const [currentDate, setCurrentDate] = useState<Date>(initialDate);
 
   useEffect(() => {
@@ -130,6 +132,7 @@ export default function DailyPaymentsModal({ initialDate, payments, concepts, on
                 {dayPayments.map(p => {
                   const concept = concepts.find(c => c.id === p.conceptId);
                   const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
+                  const paymentAcc = accounts.find(a => a.id === (p.accountId || concept?.accountId));
                   
                   return (
                     <div 
@@ -139,10 +142,19 @@ export default function DailyPaymentsModal({ initialDate, payments, concepts, on
                     >
                       <div>
                         <h3 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">{p.concept}</h3>
-                        <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
+                        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-1">
                           <span className={isNoDay ? 'text-indigo-600 font-medium' : ''}>
                             {formatPaymentDate(p, concept)}
                           </span>
+                          {paymentAcc && (
+                            <span 
+                              className="inline-flex items-center gap-0.5 px-2 py-0.2 rounded-full text-[10px] font-semibold text-white shadow-2xs"
+                              style={{ backgroundColor: paymentAcc.color }}
+                            >
+                              <span className="material-symbols-outlined text-[10px]">account_balance</span>
+                              {paymentAcc.name}
+                            </span>
+                          )}
                           {p.status === 'OVERDUE' && (
                             <span className="text-red-500 font-medium bg-red-50 px-1.5 py-0.5 rounded">Vencido</span>
                           )}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
 import { UserSettings, Payment, Concept } from '../types';
-import { db } from '../lib/firebase';
-import { doc, setDoc, deleteDoc, serverTimestamp, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc, deleteDoc, serverTimestamp, writeBatch, collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { generateAnnualPayments } from '../utils/paymentGenerator';
 import { syncAllConceptPayments } from '../utils/paymentUtils';
+import { generateAutomaticAccountColor } from '../utils/formatUtils';
 import { useData } from '../context/DataContext';
 import packageJson from '../../package.json';
 
@@ -17,13 +18,20 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({ user, settings, payments, concepts, onLogout }: SettingsViewProps) {
-  const { customCategories } = useData();
+  const { customCategories, accounts } = useData();
   // Configuración
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notificationsEnabled);
   const [generalNoticeDays, setGeneralNoticeDays] = useState(settings.generalNoticeDays);
+
+  // Cuentas Bancarias
+  const [showNewAccountModal, setShowNewAccountModal] = useState(false);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountColor, setNewAccountColor] = useState('#2563eb');
+  const [newAccountIsDefault, setNewAccountIsDefault] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
 
   // Ampliación & Sincronización
   const [isGenerating, setIsGenerating] = useState(false);
@@ -139,6 +147,83 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
     }
   };
 
+  const handleCreateAccount = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const name = newAccountName.trim();
+    if (!name) return;
+
+    const currentUid = auth.currentUser?.uid || user?.uid;
+    if (!currentUid) {
+      alert("No se detectó la sesión activa del usuario. Por favor vuelve a iniciar sesión.");
+      return;
+    }
+
+    setIsSavingAccount(true);
+    try {
+      const batch = writeBatch(db);
+      const newAccRef = doc(collection(db, 'accounts'));
+
+      // If set as default, remove default from all other accounts
+      if (newAccountIsDefault) {
+        accounts.forEach(acc => {
+          if (acc.isDefault) {
+            batch.update(doc(db, 'accounts', acc.id), { 
+              isDefault: false,
+              updatedAt: new Date()
+            });
+          }
+        });
+      }
+
+      batch.set(newAccRef, {
+        userId: currentUid,
+        name,
+        color: newAccountColor || generateAutomaticAccountColor(name),
+        isDefault: newAccountIsDefault || accounts.length === 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await batch.commit();
+      setNewAccountName('');
+      setNewAccountColor('#2563eb');
+      setNewAccountIsDefault(false);
+      setShowNewAccountModal(false);
+    } catch (err: any) {
+      console.error("Error creating account:", err);
+      alert("Error al crear la cuenta bancaria: " + (err?.message || String(err)));
+    } finally {
+      setIsSavingAccount(false);
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    if (window.confirm(`¿Seguro que deseas eliminar la cuenta "${accountName}"? Los conceptos y recibos existentes conservarán su historial pero quedarán sin cuenta asociada.`)) {
+      try {
+        await deleteDoc(doc(db, 'accounts', accountId));
+      } catch (err: any) {
+        console.error("Error deleting account:", err);
+        alert("No se pudo eliminar la cuenta bancaria: " + (err?.message || String(err)));
+      }
+    }
+  };
+
+  const handleSetDefaultAccount = async (accountId: string) => {
+    try {
+      const batch = writeBatch(db);
+      accounts.forEach(acc => {
+        batch.update(doc(db, 'accounts', acc.id), {
+          isDefault: acc.id === accountId,
+          updatedAt: new Date()
+        });
+      });
+      await batch.commit();
+    } catch (err: any) {
+      console.error("Error setting default account:", err);
+      alert("No se pudo actualizar la cuenta predeterminada: " + (err?.message || String(err)));
+    }
+  };
+
   const handleDeleteAll = async () => {
     if (deleteConfirmation !== 'ELIMINAR') {
       setDeleteMessage({ type: 'error', text: 'Debes escribir ELIMINAR para confirmar.' });
@@ -151,9 +236,11 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
     try {
       const conceptsQuery = await getDocs(query(collection(db, 'concepts'), where('userId', '==', user.uid)));
       const paymentsQuery = await getDocs(query(collection(db, 'payments'), where('userId', '==', user.uid)));
+      const categoriesQuery = await getDocs(query(collection(db, 'categories'), where('userId', '==', user.uid)));
+      const accountsQuery = await getDocs(query(collection(db, 'accounts'), where('userId', '==', user.uid)));
       const settingsRef = doc(db, 'settings', user.uid);
       
-      const allDocs = [...conceptsQuery.docs, ...paymentsQuery.docs];
+      const allDocs = [...conceptsQuery.docs, ...paymentsQuery.docs, ...categoriesQuery.docs, ...accountsQuery.docs];
       
       // Delete in chunks of 500 to avoid Firestore limits
       for (let i = 0; i < allDocs.length; i += 499) { // 499 max + settingsRef in the last one
@@ -294,7 +381,180 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
         </div>
       </section>
 
-      {/* Categorías Personalizadas */}
+      {/* Cuentas Bancarias */}
+      <section className="bg-white border border-slate-200 rounded-xl shadow-sm">
+        <div className="p-4 md:p-6 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-600">account_balance</span>
+              Cuentas Bancarias
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">Gestiona las cuentas bancarias donde se cobran tus gastos o se ingresan tus ingresos.</p>
+          </div>
+          <button
+            onClick={() => {
+              setNewAccountName('');
+              setNewAccountColor('#2563eb');
+              setNewAccountIsDefault(accounts.length === 0);
+              setShowNewAccountModal(true);
+            }}
+            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-xs"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Añadir Cuenta
+          </button>
+        </div>
+        <div className="p-4 md:p-6">
+          {accounts.length === 0 ? (
+            <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl">
+              <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">account_balance_wallet</span>
+              <p className="text-sm font-medium text-slate-600">No tienes cuentas bancarias configuradas</p>
+              <p className="text-xs text-slate-400 mt-0.5 mb-4">Añade tus cuentas (ej. BBVA, Santander, Efectivo) para asociarlas a tus gastos e ingresos.</p>
+              <button
+                onClick={() => {
+                  setNewAccountName('');
+                  setNewAccountColor('#2563eb');
+                  setNewAccountIsDefault(true);
+                  setShowNewAccountModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors inline-flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Crear primera cuenta
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {accounts.map(acc => (
+                <div key={acc.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <span className="w-4 h-4 rounded-full border shadow-xs flex-shrink-0" style={{ backgroundColor: acc.color }} />
+                    <div className="truncate">
+                      <p className="text-sm font-bold text-slate-800 truncate">{acc.name}</p>
+                      {acc.isDefault ? (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded inline-block mt-0.5">
+                          Predeterminada
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleSetDefaultAccount(acc.id)}
+                          className="text-[10px] text-slate-400 hover:text-indigo-600 font-medium hover:underline block mt-0.5"
+                          title="Establecer como cuenta por defecto"
+                        >
+                          Hacer predeterminada
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                    title="Eliminar cuenta"
+                  >
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Modal Nueva Cuenta Bancaria */}
+      {showNewAccountModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600">account_balance</span>
+                Nueva Cuenta Bancaria
+              </h3>
+              <button 
+                onClick={() => setShowNewAccountModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccount} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Nombre de la Cuenta *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: BBVA Principal, Santander Nómina, Efectivo"
+                  value={newAccountName}
+                  onChange={(e) => {
+                    setNewAccountName(e.target.value);
+                    if (!newAccountColor || newAccountColor === '#2563eb') {
+                      setNewAccountColor(generateAutomaticAccountColor(e.target.value));
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Color distintivo
+                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  {['#2563eb', '#059669', '#dc2626', '#7c3aed', '#d97706', '#0891b2', '#db2777', '#475569'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewAccountColor(c)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${newAccountColor === c ? 'border-slate-800 scale-110 shadow-xs' : 'border-white hover:scale-105'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={newAccountColor}
+                    onChange={(e) => setNewAccountColor(e.target.value)}
+                    className="w-7 h-7 rounded-full cursor-pointer border-0 p-0 overflow-hidden"
+                    title="Color personalizado"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newAccountIsDefault}
+                    onChange={(e) => setNewAccountIsDefault(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Establecer como cuenta predeterminada para nuevos conceptos</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowNewAccountModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAccount || !newAccountName.trim()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  {isSavingAccount ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : null}
+                  Guardar Cuenta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {customCategories.length > 0 && (
         <section className="bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="p-4 md:p-6 border-b border-slate-200">

@@ -7,6 +7,7 @@ import { User } from 'firebase/auth';
 import { MONTH_NAMES } from '../utils/formatUtils';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, PENDING_STATUSES } from '../utils/paymentUtils';
 import { useAppState } from '../context/AppStateContext';
+import { useData } from '../context/DataContext';
 
 interface Props {
   concept: Concept;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function ConceptDetailsView({ concept, payments, user, settings, onBack, onOpenPayment }: Props) {
+  const { accounts } = useData();
   const [priceVersions, setPriceVersions] = useState<PriceVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
@@ -128,7 +130,22 @@ export function ConceptDetailsView({ concept, payments, user, settings, onBack, 
               {concept.active ? 'Activo' : 'Inactivo'}
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">{concept.category}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-slate-500">{concept.category}</span>
+            {(() => {
+              const acc = accounts.find(a => a.id === concept.accountId);
+              if (!acc) return null;
+              return (
+                <span 
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
+                  style={{ backgroundColor: acc.color }}
+                >
+                  <span className="material-symbols-outlined text-[12px]">account_balance</span>
+                  {acc.name}
+                </span>
+              );
+            })()}
+          </div>
         </div>
         <button
           onClick={() => { setEditingConcept(concept); setIsConceptFormOpen(true); }}
@@ -190,6 +207,22 @@ export function ConceptDetailsView({ concept, payments, user, settings, onBack, 
             <div className="flex justify-between items-center py-2 border-b border-slate-100">
               <span className="text-sm text-slate-500">Tipo de fecha</span>
               <span className="text-sm font-semibold text-slate-800">{dateTypeLabel[concept.dateType]}</span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-slate-100">
+              <span className="text-sm text-slate-500">Cuenta Bancaria</span>
+              {(() => {
+                const acc = accounts.find(a => a.id === concept.accountId);
+                if (!acc) return <span className="text-sm text-slate-400">Sin cuenta asignada</span>;
+                return (
+                  <span 
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
+                    style={{ backgroundColor: acc.color }}
+                  >
+                    <span className="material-symbols-outlined text-[12px]">account_balance</span>
+                    {acc.name}
+                  </span>
+                );
+              })()}
             </div>
             {concept.dateType !== 'month_only' && concept.day && (
               <div className="flex justify-between items-center py-2 border-b border-slate-100">

@@ -15,6 +15,7 @@ export interface Concept {
   firstPeriod: Date;
   active: boolean;
   exceptionNoticeDays?: number | null;
+  accountId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ export interface Payment {
   id: string;
   userId: string;
   conceptId?: string; // Links to a Concept
+  accountId?: string; // Links to a BankAccount
   concept: string; // Stored here for fast access and history
   type?: 'expense' | 'income';
   description?: string;
@@ -35,6 +37,16 @@ export interface Payment {
   actualDate?: Date; // Fecha real de pago
   isDelayed?: boolean;
   status: 'PENDING' | 'PAID' | 'NO_NOTICE' | 'REFUNDED' | 'OVERDUE' | 'APPROX_OVERDUE' | 'PENDING_DATE' | 'CANCELED';
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface BankAccount {
+  id: string;
+  userId: string;
+  name: string; // Ej: "BBVA Principal", "Santander Nómina", "Efectivo"
+  color: string; // Color distintivo para badges
+  isDefault?: boolean;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -66,3 +78,4 @@ export interface CustomCategory {
   color: string;
   createdAt: Date;
 }
+

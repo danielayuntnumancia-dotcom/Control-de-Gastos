@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Payment, Concept } from '../types';
 import { calculateTotalPrevisto, calculateTotalPagadoReal, calculatePendientes, filterPaymentsByPeriod } from '../utils/paymentUtils';
 import { formatAmount, getPaymentDisplayAmount } from '../utils/formatUtils';
+import { useData } from '../context/DataContext';
 
 interface CalendarMonthViewProps {
   payments: Payment[];
@@ -16,6 +17,7 @@ interface CalendarMonthViewProps {
 }
 
 export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth, onNextMonth, onToday, onOpenPayment, isFiltered }: CalendarMonthViewProps) {
+  const { accounts } = useData();
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   
   // 1. Period Payments & Indicators
@@ -246,18 +248,29 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                     if (p.isDelayed) bgClass = "bg-blue-100 text-blue-800";
                     if (isApprox && p.status === 'PENDING_DATE') bgClass = "bg-orange-50 text-orange-700 border border-orange-200 border-dashed";
 
+                    const paymentAcc = accounts.find(a => a.id === (p.accountId || concept?.accountId));
+
                     return (
                       <button 
                         key={p.id}
                         onClick={() => onOpenPayment(p)}
-                        className={`text-left px-1.5 py-1 rounded text-[10px] sm:text-xs truncate transition-colors hover:brightness-95 ${bgClass}`}
-                        title={`${p.concept} - ${formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}`}
+                        className={`text-left px-1.5 py-1 rounded text-[10px] sm:text-xs truncate transition-colors hover:brightness-95 ${bgClass} relative`}
+                        title={`${p.concept} - ${formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}${paymentAcc ? ` (${paymentAcc.name})` : ''}`}
                       >
-                        <span className="font-semibold block truncate">
-                          {isApprox && <span className="font-normal opacity-80 mr-1">Aprox.</span>}
-                          {p.concept}
-                        </span>
-                        <span className="block opacity-80">
+                        <div className="flex items-center gap-1">
+                          {paymentAcc && (
+                            <span 
+                              className="w-1.5 h-1.5 rounded-full shrink-0 shadow-2xs" 
+                              style={{ backgroundColor: paymentAcc.color }} 
+                              title={paymentAcc.name}
+                            />
+                          )}
+                          <span className="font-semibold block truncate">
+                            {isApprox && <span className="font-normal opacity-80 mr-1">Aprox.</span>}
+                            {p.concept}
+                          </span>
+                        </div>
+                        <span className="block opacity-80 pl-2.5">
                           {formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}
                         </span>
                       </button>
@@ -288,12 +301,22 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
               {outOfGrid_SinDia.map(p => {
                 const conceptSinDia = concepts.find(c => c.id === p.conceptId);
                 const isApproxSinDia = conceptSinDia?.dateType === 'approximate';
+                const paymentAcc = accounts.find(a => a.id === (p.accountId || conceptSinDia?.accountId));
                 return (
                   <button 
                     key={p.id} onClick={() => onOpenPayment(p)}
                     className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors"
                   >
-                    <span className="font-medium text-slate-700">{p.concept}</span>
+                    <div className="flex items-center gap-2">
+                      {paymentAcc && (
+                        <span 
+                          className="w-2 h-2 rounded-full shrink-0" 
+                          style={{ backgroundColor: paymentAcc.color }}
+                          title={paymentAcc.name}
+                        />
+                      )}
+                      <span className="font-medium text-slate-700">{p.concept}</span>
+                    </div>
                     <span className="font-semibold text-slate-900">{formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApproxSinDia)}</span>
                   </button>
                 );
@@ -312,12 +335,22 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
               {outOfGrid_FechaPendiente.map(p => {
                 const conceptFP = concepts.find(c => c.id === p.conceptId);
                 const isApproxFP = conceptFP?.dateType === 'approximate';
+                const paymentAcc = accounts.find(a => a.id === (p.accountId || conceptFP?.accountId));
                 return (
                   <button 
                     key={p.id} onClick={() => onOpenPayment(p)}
                     className="w-full flex justify-between items-center px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-left transition-colors border border-orange-100"
                   >
-                    <span className="font-medium text-slate-700">{p.concept}</span>
+                    <div className="flex items-center gap-2">
+                      {paymentAcc && (
+                        <span 
+                          className="w-2 h-2 rounded-full shrink-0" 
+                          style={{ backgroundColor: paymentAcc.color }}
+                          title={paymentAcc.name}
+                        />
+                      )}
+                      <span className="font-medium text-slate-700">{p.concept}</span>
+                    </div>
                     <span className="font-semibold text-slate-900">{formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApproxFP)}</span>
                   </button>
                 );

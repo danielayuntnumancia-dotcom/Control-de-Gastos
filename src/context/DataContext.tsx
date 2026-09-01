@@ -2,12 +2,13 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
-import { Payment, Concept, UserSettings, CustomCategory } from '../types';
+import { Payment, Concept, UserSettings, CustomCategory, BankAccount } from '../types';
 
 interface DataContextType {
   payments: Payment[];
   concepts: Concept[];
   customCategories: CustomCategory[];
+  accounts: BankAccount[];
   settings: UserSettings | null;
   loading: boolean;
 }
@@ -19,6 +20,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,6 +29,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setPayments([]);
       setConcepts([]);
       setCustomCategories([]);
+      setAccounts([]);
       setSettings(null);
       setLoading(false);
       return;
@@ -36,9 +39,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     let paymentsReady = false;
     let conceptsReady = false;
     let categoriesReady = false;
+    let accountsReady = false;
     let settingsReady = false;
     const checkLoaded = () => {
-      if (paymentsReady && conceptsReady && categoriesReady && settingsReady) {
+      if (paymentsReady && conceptsReady && categoriesReady && accountsReady && settingsReady) {
         setLoading(false);
       }
     };
@@ -114,6 +118,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       checkLoaded();
     });
 
+    const qAccounts = query(
+      collection(db, 'accounts'),
+      where('userId', '==', user.uid)
+    );
+    const unsubscribeAccounts = onSnapshot(qAccounts, (snapshot) => {
+      const data = snapshot.docs.map(doc => {
+        const docData = doc.data();
+        return {
+          id: doc.id,
+          ...docData,
+          createdAt: docData.createdAt?.toDate() || new Date(),
+          updatedAt: docData.updatedAt?.toDate() || new Date()
+        } as BankAccount;
+      });
+      setAccounts(data);
+      accountsReady = true;
+      checkLoaded();
+    }, (error) => {
+      console.error("Error fetching accounts:", error);
+      accountsReady = true;
+      checkLoaded();
+    });
+
     const settingsRef = doc(db, 'settings', user.uid);
     const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -137,12 +164,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       unsubscribePayments();
       unsubscribeConcepts();
       unsubscribeCategories();
+      unsubscribeAccounts();
       unsubscribeSettings();
     };
   }, [user, isAuthorized]);
 
   return (
-    <DataContext.Provider value={{ payments, concepts, customCategories, settings, loading }}>
+    <DataContext.Provider value={{ payments, concepts, customCategories, accounts, settings, loading }}>
       {children}
     </DataContext.Provider>
   );

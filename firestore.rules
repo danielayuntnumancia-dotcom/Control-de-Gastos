@@ -30,6 +30,7 @@ service cloud.firestore {
         && data.userId is string && data.userId.size() <= 128
         && (data.get('concept', null) == null || (data.get('concept', '') is string && data.get('concept', '').size() <= 256))
         && (data.get('conceptId', null) == null || data.get('conceptId', null) is string)
+        && (data.get('accountId', null) == null || data.get('accountId', null) is string)
         && data.get('description', '') is string
         && data.dueDate is timestamp
         && (data.get('originalPeriodMonth', null) == null || data.get('originalPeriodMonth', null) is number)
@@ -48,6 +49,7 @@ service cloud.firestore {
         && data.userId is string && data.userId.size() <= 128
         && data.name is string && data.name.size() <= 256
         && data.category is string && data.category.size() <= 128
+        && (data.get('accountId', null) == null || data.get('accountId', null) is string)
         && data.get('description', '') is string
         && data.expectedAmount is number
         && (data.get('color', null) == null || data.get('color', null) is string)
@@ -134,9 +136,18 @@ service cloud.firestore {
     }
 
     match /categories/{categoryId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }
+
