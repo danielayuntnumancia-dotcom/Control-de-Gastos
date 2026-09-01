@@ -517,20 +517,22 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             {getConceptColor(concept) && (
-                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getConceptColor(concept) }} />
-                        )}
-                        <div>
-                          <h3 className="font-medium text-slate-900">{concept.name}</h3>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-xs text-slate-500">{concept.category}</span>
-                            {conceptAccount && (
-                              <span 
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white shadow-2xs"
-                                style={{ backgroundColor: conceptAccount.color }}
-                              >
-                                {conceptAccount.name}
-                              </span>
+                              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getConceptColor(concept) }} />
                             )}
+                            <div>
+                              <h3 className="font-medium text-slate-900">{concept.name}</h3>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-xs text-slate-500">{concept.category}</span>
+                                {conceptAccount && (
+                                  <span 
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white shadow-2xs"
+                                    style={{ backgroundColor: conceptAccount.color }}
+                                  >
+                                    {conceptAccount.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
