@@ -77,6 +77,35 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     setColor(getCategoryColor(category, customMatch?.color));
   }, [category, customCategories]);
 
+  const availableCategories = useMemo(() => {
+    let baseList: string[] = [];
+    if (type === 'expense') {
+      baseList = ['Suscripción', 'Impuesto', 'Tasa', 'Seguro', 'Hipoteca', 'Préstamo', 'Ahorro', 'Otro'];
+      const custom = customCategories
+        .filter(c => c.type === 'expense' || c.type === 'both')
+        .map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    } else if (type === 'income') {
+      baseList = ['Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'];
+      const custom = customCategories
+        .filter(c => c.type === 'income' || c.type === 'both')
+        .map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    } else {
+      baseList = ['Ahorro', 'Inversión', 'Otro'];
+      const custom = customCategories
+        .filter(c => c.type === 'both')
+        .map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    }
+
+    if (category && !baseList.includes(category)) {
+      baseList.push(category);
+    }
+
+    return baseList.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [type, customCategories, category]);
+
   useEffect(() => {
     if (!initialConcept) {
       setCategory(type === 'income' ? 'Salario' : type === 'transfer' ? 'Ahorro' : 'Suscripción');
@@ -272,7 +301,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       originalPeriodMonth: occ.originalPeriodMonth,
       originalPeriodYear: occ.originalPeriodYear,
     })).slice(0, 6);
-  }, [periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, name, amountCents]);
+  }, [periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, name, amountCents, type]);
+
 
   const handleSave = async () => {
     if (!user) return;
@@ -314,8 +344,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         name: name.trim(),
         type: type || 'expense',
         category,
-        accountId: accountId || undefined,
-        destinationAccountId: type === 'transfer' ? (destinationAccountId || undefined) : undefined,
+        accountId: accountId || null,
+        destinationAccountId: (type === 'transfer' && destinationAccountId) ? destinationAccountId : null,
         description,
         expectedAmount: amountCents,
         amountType: amountType,
@@ -579,46 +609,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                     onChange={e => setCategory(e.target.value as Concept['category'])}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                   >
-                    {type === 'expense' ? (
-                      <>
-                        <option value="Suscripción">Suscripción</option>
-                        <option value="Impuesto">Impuesto</option>
-                        <option value="Tasa">Tasa</option>
-                        <option value="Seguro">Seguro</option>
-                        <option value="Hipoteca">Hipoteca</option>
-                        <option value="Préstamo">Préstamo</option>
-                        <option value="Ahorro">Ahorro</option>
-                        <option value="Otro">Otro</option>
-                        {customCategories.filter(c => c.type === 'expense' || c.type === 'both').map(c => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                        {!['Suscripción', 'Impuesto', 'Tasa', 'Seguro', 'Hipoteca', 'Préstamo', 'Ahorro', 'Otro'].includes(category) && !customCategories.some(c => c.name === category) && category && (
-                          <option value={category}>{category}</option>
-                        )}
-                      </>
-                    ) : type === 'income' ? (
-                      <>
-                        <option value="Salario">Salario</option>
-                        <option value="Paga Extra">Paga Extra</option>
-                        <option value="Ingreso Extra">Ingreso Extra</option>
-                        <option value="Ahorro">Ahorro</option>
-                        <option value="Otro">Otro</option>
-                        {customCategories.filter(c => c.type === 'income' || c.type === 'both').map(c => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                        {!['Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'].includes(category) && !customCategories.some(c => c.name === category) && category && (
-                          <option value={category}>{category}</option>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <option value="Ahorro">Ahorro</option>
-                        <option value="Inversión">Inversión</option>
-                        {customCategories.filter(c => c.type === 'both').map(c => (
-                          <option key={c.id} value={c.name}>{c.name}</option>
-                        ))}
-                      </>
-                    )}
+                    {availableCategories.map(catName => (
+                      <option key={catName} value={catName}>{catName}</option>
+                    ))}
                   </select>
                 </div>
                 <div>

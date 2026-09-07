@@ -15,8 +15,8 @@ export interface Concept {
   firstPeriod: Date;
   active: boolean;
   exceptionNoticeDays?: number | null;
-  accountId?: string; // Origin account (debit/source)
-  destinationAccountId?: string; // Destination account (credit/target) for transfers
+  accountId?: string | null; // Origin account (debit/source)
+  destinationAccountId?: string | null; // Destination account (credit/target) for transfers
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,8 +25,8 @@ export interface Payment {
   id: string;
   userId: string;
   conceptId?: string; // Links to a Concept
-  accountId?: string; // Links to a BankAccount (Origin)
-  destinationAccountId?: string; // Links to a BankAccount (Destination for transfers)
+  accountId?: string | null; // Links to a BankAccount (Origin)
+  destinationAccountId?: string | null; // Links to a BankAccount (Destination for transfers)
   concept: string; // Stored here for fast access and history
   type?: 'expense' | 'income' | 'transfer';
   description?: string;

@@ -19,7 +19,7 @@ interface ConceptsViewProps {
 
 export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const { user } = useAuth();
-  const { accounts } = useData();
+  const { accounts, customCategories } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterAccount, setFilterAccount] = useState<string>('');
@@ -30,6 +30,31 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isBulkManagerOpen, setIsBulkManagerOpen] = useState(false);
+
+  const filterCategories = useMemo(() => {
+    let baseList: string[] = [];
+    if (viewType === 'expense') {
+      baseList = ['Suscripción', 'Impuesto', 'Tasa', 'Seguro', 'Hipoteca', 'Préstamo', 'Ahorro', 'Otro'];
+      const custom = customCategories.filter(c => c.type === 'expense' || c.type === 'both').map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    } else if (viewType === 'income') {
+      baseList = ['Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'];
+      const custom = customCategories.filter(c => c.type === 'income' || c.type === 'both').map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    } else {
+      baseList = ['Ahorro', 'Inversión', 'Otro'];
+      const custom = customCategories.filter(c => c.type === 'both').map(c => c.name);
+      baseList = Array.from(new Set([...baseList, ...custom]));
+    }
+
+    concepts.filter(c => (c.type || 'expense') === viewType).forEach(c => {
+      if (c.category && !baseList.includes(c.category)) {
+        baseList.push(c.category);
+      }
+    });
+
+    return baseList.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [viewType, customCategories, concepts]);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -338,32 +363,9 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
             className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white"
           >
             <option value="">Todas las categorías</option>
-            {viewType === 'expense' ? (
-              <>
-                <option value="Suscripción">Suscripción</option>
-                <option value="Impuesto">Impuesto</option>
-                <option value="Tasa">Tasa</option>
-                <option value="Seguro">Seguro</option>
-                <option value="Hipoteca">Hipoteca</option>
-                <option value="Préstamo">Préstamo</option>
-                <option value="Ahorro">Ahorro</option>
-                <option value="Otro">Otro</option>
-              </>
-            ) : viewType === 'income' ? (
-              <>
-                <option value="Salario">Salario</option>
-                <option value="Paga Extra">Paga Extra</option>
-                <option value="Ingreso Extra">Ingreso Extra</option>
-                <option value="Ahorro">Ahorro</option>
-                <option value="Otro">Otro</option>
-              </>
-            ) : (
-              <>
-                <option value="Ahorro">Ahorro</option>
-                <option value="Inversión">Inversión</option>
-                <option value="Otro">Otro</option>
-              </>
-            )}
+            {filterCategories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
           <select 
             value={filterStatus} 

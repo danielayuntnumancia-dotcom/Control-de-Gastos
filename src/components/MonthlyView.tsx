@@ -30,10 +30,20 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
   // Removed local globalYear
 
   // Filters
-  const { accounts } = useData();
+  const { accounts, customCategories } = useData();
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterAccount, setFilterAccount] = useState<string>('ALL');
+
+  const filterCategories = useMemo(() => {
+    const list = new Set<string>();
+    ['Suscripción', 'Impuesto', 'Tasa', 'Seguro', 'Hipoteca', 'Préstamo', 'Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'].forEach(c => list.add(c));
+    customCategories.forEach(c => list.add(c.name));
+    concepts.forEach(c => {
+      if (c.category) list.add(c.category);
+    });
+    return Array.from(list).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [customCategories, concepts]);
 
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
@@ -117,11 +127,9 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
               className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white"
             >
               <option value="ALL">Todas las categorías</option>
-              <option value="Suscripción">Suscripciones</option>
-              <option value="Impuesto">Impuestos</option>
-              <option value="Tasa">Tasas</option>
-              <option value="Seguro">Seguros</option>
-              <option value="Otro">Otros</option>
+              {filterCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
             
             <select 
