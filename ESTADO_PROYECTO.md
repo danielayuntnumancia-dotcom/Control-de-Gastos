@@ -3,24 +3,29 @@
 **Última actualización:** 7 de Septiembre de 2026
 
 ## Logros de la Sesión
-- **Apartado de Asignación y Edición Masiva de Cuentas a Conceptos:**
-  - Creación del componente `BulkAccountAssignmentManager.tsx`.
-  - Pestañas con contadores en tiempo real por cuenta y detección de conceptos sin cuenta (`Sin Cuenta`).
-  - Edición en línea directa por fila con menú de cuentas.
-  - Selección múltiple y asignación masiva en bloque a cuentas bancarias.
-  - Control de fecha de corte para actualizar automáticamente los recibos pendientes en Firestore respetando los ya pagados.
-  - Puntos de acceso integrados en `ConceptsView.tsx` ("Asignar Cuentas en Masa") y en `SettingsView.tsx` ("Asignar Conceptos" en Cuentas Bancarias con badges de conteo).
-- **Desglose de Gastos por Cuenta en el Mes Corriente:**
-  - Sección visual en el Dashboard ("Gastos por Cuenta Bancaria") con total previsto, pendiente (importe y conteo de recibos), total pagado y barra de progreso.
-  - Chips interactivos de filtro rápido por cuenta en la cabecera de "Próximos Gastos" e insignias de cuenta en cada fila.
-  - Desglose consolidado al pie de la tarjeta de "Próximos Gastos".
-  - Desplegable de filtro por cuenta bancaria en `MonthlyView.tsx` (Calendario y Lista).
+- **Concepto "Traspaso / Ahorro" con Cuenta de Origen y Cuenta de Destino:**
+  - Soporte nativo para conceptos de traspaso de fondos (ej. dinero que sale de *Unicaja* y entra en *Trade Republic*).
+  - Tipado actualizado en `src/types.ts` (`type: 'transfer'` y `destinationAccountId`).
+  - Formulario de conceptos (`ConceptForm.tsx`) con 3 pestañas: *Gasto*, *Ingreso* y *Traspaso / Ahorro*, con selectores duales validados para evitar seleccionar la misma cuenta en origen y destino.
+  - Insignia visual del flujo `[Cuenta Origen] ➔ [Cuenta Destino]` con icono `sync_alt` en `ConceptsView.tsx`, `ConceptDetailsView.tsx`, `CalendarListView.tsx` y `CalendarMonthView.tsx`.
+  - En `DashboardView.tsx`: los traspasos computan como salida pendiente/prevista de la cuenta de origen para planificar el saldo bancario necesario, manteniendo neutralidad en el balance global.
+  - En `PaymentDetailsPanel.tsx`: soporte para visualizar y editar la cuenta de origen y de destino de los pagos de traspaso.
+  - En `AnnualView.tsx`: sección dedicada e independiente de *Traspasos / Ahorro* con su matriz mensual y totales.
+  - En `paymentGenerator.ts` y `paymentUtils.ts`: generación y sincronización automática de recibos con ambas cuentas asociadas.
+- **Corrección de Guardado en Firestore (`undefined`):**
+  - Se eliminaron valores `undefined` en `destinationAccountId` y `accountId`, reemplazándolos por `null` para cumplir con las especificaciones de Cloud Firestore.
+- **Orden Alfabético en Categorías:**
+  - Ordenamiento alfabético estricto (A-Z con `localeCompare` en español) en el selector de categorías de `ConceptForm.tsx`, integrando automáticamente tanto las categorías predeterminadas como cualquier categoría personalizada nueva.
+  - Ordenamiento alfabético también aplicado en los desplegables de filtro de `ConceptsView.tsx` y `MonthlyView.tsx`.
+- **Corrección de Reglas de Seguridad en Cloud Firestore:**
+  - Se actualizó [firestore.rules](file:///e:/01%20-%20GitHub/Control-de-Gastos-main/firestore.rules) para validar y permitir el campo `destinationAccountId` en `isValidConcept` e `isValidPayment`.
+  - Se implementó `serverTimestamp()` de Firebase en `ConceptForm.tsx` para cumplir con la verificación `createdAt == request.time` del servidor.
 - **Despliegue y Sincronización:**
-  - Compilación de producción validada con éxito (`npm run build`).
-  - Despliegue en Firebase Hosting (`https://control-de-gastos-7ef00.web.app`).
-  - Commits subidos a GitHub en la rama `main`.
+  - Compilación limpia de producción con Vite/TypeScript (`npm run build`).
+  - Despliegue de Hosting y reglas de seguridad en Firebase (`control-de-gastos-7ef00.web.app`).
+  - Repositorio sincronizado en GitHub en la rama `main`.
 
 ## Tareas Pendientes para la Próxima Sesión
-- Probar la compilación final del APK en Android Studio y verificar el flujo de uso completo desde dispositivos físicos.
-- Monitorear el uso del nuevo gestor masivo de cuentas y la visualización de gastos por cuenta en móviles.
-- Evaluar la incorporación de nuevas métricas o gráficos avanzados en el Resumen Anual.
+- Monitorizar el comportamiento del concepto **Ahorro** configurado como traspaso entre *Unicaja* y *Trade Republic*.
+- Probar la compilación final del APK en Android Studio con las nuevas funciones implementadas.
+- Evaluar posibles mejoras de visualización en pantallas móviles reducidas para los badges de flujo entre cuentas.
