@@ -31,6 +31,7 @@ service cloud.firestore {
         && (data.get('concept', null) == null || (data.get('concept', '') is string && data.get('concept', '').size() <= 256))
         && (data.get('conceptId', null) == null || data.get('conceptId', null) is string)
         && (data.get('accountId', null) == null || data.get('accountId', null) is string)
+        && (data.get('destinationAccountId', null) == null || data.get('destinationAccountId', null) is string)
         && data.get('description', '') is string
         && data.dueDate is timestamp
         && (data.get('originalPeriodMonth', null) == null || data.get('originalPeriodMonth', null) is number)
@@ -50,6 +51,7 @@ service cloud.firestore {
         && data.name is string && data.name.size() <= 256
         && data.category is string && data.category.size() <= 128
         && (data.get('accountId', null) == null || data.get('accountId', null) is string)
+        && (data.get('destinationAccountId', null) == null || data.get('destinationAccountId', null) is string)
         && data.get('description', '') is string
         && data.expectedAmount is number
         && (data.get('color', null) == null || data.get('color', null) is string)
@@ -117,7 +119,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn()
         && incoming().userId == request.auth.uid
-        && incoming().createdAt == request.time
+        && (incoming().createdAt == request.time || incoming().createdAt is timestamp)
         && isValidConcept(incoming());
       allow update: if isSignedIn()
         && existing().userId == request.auth.uid;
@@ -128,7 +130,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn()
         && incoming().userId == request.auth.uid
-        && incoming().createdAt == request.time
+        && (incoming().createdAt == request.time || incoming().createdAt is timestamp)
         && isValidPayment(incoming());
       allow update: if isSignedIn()
         && existing().userId == request.auth.uid;

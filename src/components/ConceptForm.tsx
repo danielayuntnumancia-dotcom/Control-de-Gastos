@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Concept, Payment } from '../types';
-import { doc, setDoc, addDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, addDoc, writeBatch, collection, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
@@ -338,7 +338,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       const batch = writeBatch(db);
       
       const conceptRef = isEdit ? doc(db, 'concepts', initialConcept.id) : doc(collection(db, 'concepts'));
-      const conceptData: Concept = {
+      const conceptData: any = {
         id: conceptRef.id,
         userId: user.uid,
         name: name.trim(),
@@ -357,8 +357,8 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         exceptionNoticeDays: exceptionNoticeDays === '' ? null : Number(exceptionNoticeDays),
         firstPeriod: new Date(firstPeriodYear, firstPeriodMonth, 1),
         active,
-        createdAt: isEdit ? initialConcept.createdAt : new Date(),
-        updatedAt: new Date()
+        createdAt: isEdit ? initialConcept.createdAt : serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
       
       batch.set(conceptRef, conceptData, { merge: true });
@@ -423,7 +423,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               dueDate: occ.dueDate,
               originalPeriodMonth: occ.originalPeriodMonth,
               originalPeriodYear: occ.originalPeriodYear,
-              createdAt: new Date()
+              createdAt: serverTimestamp()
             });
             existingKeySet.add(key);
           }
