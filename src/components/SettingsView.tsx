@@ -7,6 +7,7 @@ import { generateAnnualPayments } from '../utils/paymentGenerator';
 import { syncAllConceptPayments } from '../utils/paymentUtils';
 import { generateAutomaticAccountColor } from '../utils/formatUtils';
 import { useData } from '../context/DataContext';
+import { BulkAccountAssignmentManager } from './BulkAccountAssignmentManager';
 import packageJson from '../../package.json';
 
 interface SettingsViewProps {
@@ -28,6 +29,7 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
 
   // Cuentas Bancarias
   const [showNewAccountModal, setShowNewAccountModal] = useState(false);
+  const [showBulkAccountManager, setShowBulkAccountManager] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountColor, setNewAccountColor] = useState('#2563eb');
   const [newAccountIsDefault, setNewAccountIsDefault] = useState(false);
@@ -391,18 +393,30 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
             </h3>
             <p className="text-sm text-slate-500 mt-1">Gestiona las cuentas bancarias donde se cobran tus gastos o se ingresan tus ingresos.</p>
           </div>
-          <button
-            onClick={() => {
-              setNewAccountName('');
-              setNewAccountColor('#2563eb');
-              setNewAccountIsDefault(accounts.length === 0);
-              setShowNewAccountModal(true);
-            }}
-            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-xs"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Añadir Cuenta
-          </button>
+          <div className="flex items-center gap-2">
+            {accounts.length > 0 && (
+              <button
+                onClick={() => setShowBulkAccountManager(true)}
+                className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-1.5 shadow-xs"
+                title="Asignar y editar conceptos por cuenta en masa"
+              >
+                <span className="material-symbols-outlined text-[18px]">account_tree</span>
+                <span className="hidden sm:inline">Asignar Conceptos</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setNewAccountName('');
+                setNewAccountColor('#2563eb');
+                setNewAccountIsDefault(accounts.length === 0);
+                setShowNewAccountModal(true);
+              }}
+              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Añadir Cuenta
+            </button>
+          </div>
         </div>
         <div className="p-4 md:p-6">
           {accounts.length === 0 ? (
@@ -425,36 +439,44 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {accounts.map(acc => (
-                <div key={acc.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <span className="w-4 h-4 rounded-full border shadow-xs flex-shrink-0" style={{ backgroundColor: acc.color }} />
-                    <div className="truncate">
-                      <p className="text-sm font-bold text-slate-800 truncate">{acc.name}</p>
-                      {acc.isDefault ? (
-                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded inline-block mt-0.5">
-                          Predeterminada
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleSetDefaultAccount(acc.id)}
-                          className="text-[10px] text-slate-400 hover:text-indigo-600 font-medium hover:underline block mt-0.5"
-                          title="Establecer como cuenta por defecto"
-                        >
-                          Hacer predeterminada
-                        </button>
-                      )}
+              {accounts.map(acc => {
+                const assignedCount = concepts.filter(c => c.accountId === acc.id).length;
+                return (
+                  <div key={acc.id} className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 flex items-center justify-between gap-2 shadow-xs hover:border-slate-300 transition-colors">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <span className="w-4 h-4 rounded-full border shadow-xs flex-shrink-0" style={{ backgroundColor: acc.color }} />
+                      <div className="truncate">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-bold text-slate-800 truncate">{acc.name}</p>
+                          <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap" title={`${assignedCount} conceptos vinculados`}>
+                            ({assignedCount})
+                          </span>
+                        </div>
+                        {acc.isDefault ? (
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded inline-block mt-0.5">
+                            Predeterminada
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSetDefaultAccount(acc.id)}
+                            className="text-[10px] text-slate-400 hover:text-indigo-600 font-medium hover:underline block mt-0.5"
+                            title="Establecer como cuenta por defecto"
+                          >
+                            Hacer predeterminada
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    <button 
+                      onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                      title="Eliminar cuenta"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                    title="Eliminar cuenta"
-                  >
-                    <span className="material-symbols-outlined text-sm">delete</span>
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -555,6 +577,14 @@ export function SettingsView({ user, settings, payments, concepts, onLogout }: S
           </div>
         </div>
       )}
+      {showBulkAccountManager && (
+        <BulkAccountAssignmentManager
+          concepts={concepts}
+          accounts={accounts}
+          onClose={() => setShowBulkAccountManager(false)}
+        />
+      )}
+
       {customCategories.length > 0 && (
         <section className="bg-white border border-slate-200 rounded-xl shadow-sm">
           <div className="p-4 md:p-6 border-b border-slate-200">

@@ -3,6 +3,7 @@ import { Payment, Concept } from '../types';
 import { CalendarMonthView } from './CalendarMonthView';
 import { CalendarListView } from './CalendarListView';
 import { CalendarYearView } from './CalendarYearView';
+import { useData } from '../context/DataContext';
 
 type ViewMode = 'month' | 'list' | 'year';
 
@@ -29,8 +30,10 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
   // Removed local globalYear
 
   // Filters
+  const { accounts } = useData();
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterAccount, setFilterAccount] = useState<string>('ALL');
 
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
@@ -63,11 +66,22 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
         const concept = concepts.find(c => c.id === p.conceptId);
         if (concept?.category !== filterCategory) return false;
       }
+
+      if (filterAccount !== 'ALL') {
+        const concept = concepts.find(c => c.id === p.conceptId);
+        const accId = p.accountId || concept?.accountId;
+        if (filterAccount === 'UNASSIGNED') {
+          if (accId) return false;
+        } else if (accId !== filterAccount) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [payments, concepts, filterCategory, filterStatus]);
+  }, [payments, concepts, filterCategory, filterStatus, filterAccount]);
 
-  const hasActiveFilters = filterCategory !== 'ALL' || filterStatus !== 'ALL';
+  const hasActiveFilters = filterCategory !== 'ALL' || filterStatus !== 'ALL' || filterAccount !== 'ALL';
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 h-full">
@@ -124,9 +138,23 @@ export function MonthlyView({ payments, concepts, onOpenPayment, globalYear, set
               <option value="CANCELED">Cancelado</option>
             </select>
 
+            {accounts.length > 0 && (
+              <select 
+                value={filterAccount}
+                onChange={e => setFilterAccount(e.target.value)}
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white font-medium text-slate-700"
+              >
+                <option value="ALL">Todas las cuentas</option>
+                <option value="UNASSIGNED">Sin cuenta</option>
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.name}</option>
+                ))}
+              </select>
+            )}
+
             {hasActiveFilters && (
               <button 
-                onClick={() => { setFilterCategory('ALL'); setFilterStatus('ALL'); }}
+                onClick={() => { setFilterCategory('ALL'); setFilterStatus('ALL'); setFilterAccount('ALL'); }}
                 className="text-xs text-slate-500 hover:text-slate-800"
                 title="Restablecer filtros"
               >

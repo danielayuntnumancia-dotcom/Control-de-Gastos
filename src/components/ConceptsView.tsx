@@ -9,6 +9,7 @@ import { syncAllConceptPayments } from '../utils/paymentUtils';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { BulkAccountAssignModal } from './BulkAccountAssignModal';
+import { BulkAccountAssignmentManager } from './BulkAccountAssignmentManager';
 
 interface ConceptsViewProps {
   concepts: Concept[];
@@ -28,6 +29,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isBulkManagerOpen, setIsBulkManagerOpen] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -368,6 +370,16 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
               ))}
             </select>
           )}
+          {accounts.length > 0 && (
+            <button
+              onClick={() => setIsBulkManagerOpen(true)}
+              className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
+              title="Editar y asignar en masa qué conceptos van a qué cuenta bancaria"
+            >
+              <span className="material-symbols-outlined text-[18px]">account_tree</span>
+              <span>Asignar Cuentas en Masa</span>
+            </button>
+          )}
           <button
             onClick={handleSync}
             disabled={isSyncing}
@@ -607,6 +619,14 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
           selectedCount={selectedConceptIds.length}
           onClose={() => setIsAssignModalOpen(false)}
           onConfirm={handleBulkAssignAccount}
+        />
+      )}
+
+      {isBulkManagerOpen && (
+        <BulkAccountAssignmentManager
+          concepts={concepts}
+          accounts={accounts}
+          onClose={() => setIsBulkManagerOpen(false)}
         />
       )}
 
