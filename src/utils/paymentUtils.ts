@@ -5,31 +5,37 @@ import { generateOccurrences } from './occurrenceEngine';
 
 export const PENDING_STATUSES = ['PENDING', 'OVERDUE', 'APPROX_OVERDUE', 'PENDING_DATE', 'NO_NOTICE'];
 
-export function calculateTotalPrevisto(payments: Payment[]): { expenses: number, incomes: number, net: number } {
+export function calculateTotalPrevisto(payments: Payment[]): { expenses: number, incomes: number, net: number, transfers: number } {
   let expenses = 0;
   let incomes = 0;
+  let transfers = 0;
   payments.filter(p => p.status !== 'CANCELED').forEach(p => {
-    if ((p.type || 'expense') === 'income') {
+    if (p.type === 'income') {
       incomes += p.expectedAmount;
+    } else if (p.type === 'transfer') {
+      transfers += p.expectedAmount;
     } else {
       expenses += p.expectedAmount;
     }
   });
-  return { expenses: expenses / 100, incomes: incomes / 100, net: (incomes - expenses) / 100 };
+  return { expenses: expenses / 100, incomes: incomes / 100, net: (incomes - expenses) / 100, transfers: transfers / 100 };
 }
 
-export function calculateTotalPagadoReal(payments: Payment[]): { expenses: number, incomes: number, net: number } {
+export function calculateTotalPagadoReal(payments: Payment[]): { expenses: number, incomes: number, net: number, transfers: number } {
   let expenses = 0;
   let incomes = 0;
+  let transfers = 0;
   payments.filter(p => p.status === 'PAID').forEach(p => {
     const amt = p.actualAmount ?? p.expectedAmount;
-    if ((p.type || 'expense') === 'income') {
+    if (p.type === 'income') {
       incomes += amt;
+    } else if (p.type === 'transfer') {
+      transfers += amt;
     } else {
       expenses += amt;
     }
   });
-  return { expenses: expenses / 100, incomes: incomes / 100, net: (incomes - expenses) / 100 };
+  return { expenses: expenses / 100, incomes: incomes / 100, net: (incomes - expenses) / 100, transfers: transfers / 100 };
 }
 
 export function calculateDiferenciaConfirmada(payments: Payment[]): number {
@@ -42,18 +48,21 @@ export function calculateDiferenciaConfirmada(payments: Payment[]): number {
   }, 0);
 }
 
-export function calculatePendientes(payments: Payment[]): { expenses: number, incomes: number, count: number } {
+export function calculatePendientes(payments: Payment[]): { expenses: number, incomes: number, count: number, transfers: number } {
   const pendingPayments = payments.filter(p => PENDING_STATUSES.includes(p.status));
   let expenses = 0;
   let incomes = 0;
+  let transfers = 0;
   pendingPayments.forEach(p => {
-    if ((p.type || 'expense') === 'income') {
+    if (p.type === 'income') {
       incomes += p.expectedAmount;
+    } else if (p.type === 'transfer') {
+      transfers += p.expectedAmount;
     } else {
       expenses += p.expectedAmount;
     }
   });
-  return { expenses: expenses / 100, incomes: incomes / 100, count: pendingPayments.length };
+  return { expenses: expenses / 100, incomes: incomes / 100, count: pendingPayments.length, transfers: transfers / 100 };
 }
 
 export function filterPaymentsByPeriod(payments: Payment[], month: number, year: number): Payment[] {
@@ -147,6 +156,7 @@ export async function syncAllConceptPayments(userUid: string, concepts: Concept[
           userId: userUid,
           conceptId: concept.id,
           accountId: concept.accountId || null,
+          destinationAccountId: concept.destinationAccountId || null,
           concept: concept.name,
           type: concept.type || 'expense',
           expectedAmount: concept.expectedAmount,

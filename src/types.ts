@@ -2,7 +2,7 @@ export interface Concept {
   id: string;
   userId: string;
   name: string;
-  type?: 'expense' | 'income';
+  type?: 'expense' | 'income' | 'transfer';
   category: 'Suscripción' | 'Impuesto' | 'Tasa' | 'Seguro' | 'Hipoteca' | 'Préstamo' | 'Salario' | 'Paga Extra' | 'Ingreso Extra' | 'Ahorro' | 'Otro';
   description?: string;
   expectedAmount: number; // in cents
@@ -15,7 +15,8 @@ export interface Concept {
   firstPeriod: Date;
   active: boolean;
   exceptionNoticeDays?: number | null;
-  accountId?: string;
+  accountId?: string; // Origin account (debit/source)
+  destinationAccountId?: string; // Destination account (credit/target) for transfers
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,9 +25,10 @@ export interface Payment {
   id: string;
   userId: string;
   conceptId?: string; // Links to a Concept
-  accountId?: string; // Links to a BankAccount
+  accountId?: string; // Links to a BankAccount (Origin)
+  destinationAccountId?: string; // Links to a BankAccount (Destination for transfers)
   concept: string; // Stored here for fast access and history
-  type?: 'expense' | 'income';
+  type?: 'expense' | 'income' | 'transfer';
   description?: string;
   dueDate: Date; // Effective Date
   originalPeriodMonth?: number; // 0-11

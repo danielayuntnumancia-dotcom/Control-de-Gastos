@@ -111,10 +111,10 @@ export function getPaymentDisplayAmount(payment: { actualAmount?: number | null,
   return payment.expectedAmount;
 }
 
-export function formatAmount(cents: number, type: 'expense' | 'income' = 'expense', isApproximate: boolean = false): string {
+export function formatAmount(cents: number, type: 'expense' | 'income' | 'transfer' = 'expense', isApproximate: boolean = false): string {
   const value = cents / 100;
   const formatted = value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
   const prefix = isApproximate ? '~' : '';
-  const sign = type === 'income' ? '+' : '-';
+  const sign = type === 'income' ? '+' : type === 'transfer' ? '⇄ ' : '-';
   return `${prefix}${sign}${formatted}`;
 }

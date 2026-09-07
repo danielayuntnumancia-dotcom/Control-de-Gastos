@@ -25,7 +25,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
   const [filterAccount, setFilterAccount] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>(''); // '' | 'active' | 'inactive'
   const [sortBy, setSortBy] = useState<'name' | 'next_due' | 'amount'>('name');
-  const [viewType, setViewType] = useState<'expense' | 'income'>('expense');
+  const [viewType, setViewType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedConceptIds, setSelectedConceptIds] = useState<string[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -301,18 +301,25 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-6">
           <h2 className="text-2xl font-bold text-slate-800">Conceptos</h2>
-          <div className="flex bg-slate-100 p-1 rounded-lg">
+          <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
             <button
               onClick={() => { setViewType('expense'); setFilterCategory(''); }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewType === 'expense' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${viewType === 'expense' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Gastos
             </button>
             <button
               onClick={() => { setViewType('income'); setFilterCategory(''); }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${viewType === 'income' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${viewType === 'income' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Ingresos
+            </button>
+            <button
+              onClick={() => { setViewType('transfer'); setFilterCategory(''); }}
+              className={`px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors flex items-center gap-1 ${viewType === 'transfer' ? 'bg-white text-indigo-700 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">sync_alt</span>
+              Traspasos
             </button>
           </div>
         </div>
@@ -337,13 +344,23 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                 <option value="Impuesto">Impuesto</option>
                 <option value="Tasa">Tasa</option>
                 <option value="Seguro">Seguro</option>
+                <option value="Hipoteca">Hipoteca</option>
+                <option value="Préstamo">Préstamo</option>
+                <option value="Ahorro">Ahorro</option>
                 <option value="Otro">Otro</option>
               </>
-            ) : (
+            ) : viewType === 'income' ? (
               <>
                 <option value="Salario">Salario</option>
                 <option value="Paga Extra">Paga Extra</option>
                 <option value="Ingreso Extra">Ingreso Extra</option>
+                <option value="Ahorro">Ahorro</option>
+                <option value="Otro">Otro</option>
+              </>
+            ) : (
+              <>
+                <option value="Ahorro">Ahorro</option>
+                <option value="Inversión">Inversión</option>
                 <option value="Otro">Otro</option>
               </>
             )}
@@ -431,6 +448,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                 <tbody className="divide-y divide-slate-100">
                   {filteredConcepts.map(concept => {
                     const conceptAccount = accounts.find(a => a.id === concept.accountId);
+                    const destAccount = accounts.find(a => a.id === concept.destinationAccountId);
                     const isSelected = selectedConceptIds.includes(concept.id);
                     return (
                       <tr key={concept.id} className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50/50' : ''}`} onClick={() => onSelect(concept)}>
@@ -449,9 +467,16 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                             )}
                             <div>
                               <div className="font-medium text-slate-900">{concept.name}</div>
-                              <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className="text-xs text-slate-500">{concept.category}</span>
-                                {conceptAccount && (
+                                {concept.type === 'transfer' ? (
+                                  <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full text-[10px] font-bold text-indigo-900">
+                                    <span className="material-symbols-outlined text-[12px] text-indigo-600">sync_alt</span>
+                                    <span>{conceptAccount ? conceptAccount.name : 'Sin origen'}</span>
+                                    <span className="text-indigo-400">➔</span>
+                                    <span>{destAccount ? destAccount.name : 'Sin destino'}</span>
+                                  </div>
+                                ) : conceptAccount ? (
                                   <span 
                                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white shadow-2xs"
                                     style={{ backgroundColor: conceptAccount.color }}
@@ -459,7 +484,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                                     <span className="material-symbols-outlined text-[11px]">account_balance</span>
                                     {conceptAccount.name}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                             </div>
                           </div>
@@ -513,6 +538,7 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
             <div className="md:hidden flex flex-col divide-y divide-slate-100 pb-16">
               {filteredConcepts.map(concept => {
                 const conceptAccount = accounts.find(a => a.id === concept.accountId);
+                const destAccount = accounts.find(a => a.id === concept.destinationAccountId);
                 const isSelected = selectedConceptIds.includes(concept.id);
                 return (
                   <div key={concept.id} className={`p-4 hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-blue-50/50' : ''}`} onClick={() => onSelect(concept)}>
@@ -533,16 +559,23 @@ export function ConceptsView({ concepts, onNew, onSelect }: ConceptsViewProps) {
                             )}
                             <div>
                               <h3 className="font-medium text-slate-900">{concept.name}</h3>
-                              <div className="flex items-center gap-1.5 mt-0.5">
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span className="text-xs text-slate-500">{concept.category}</span>
-                                {conceptAccount && (
+                                {concept.type === 'transfer' ? (
+                                  <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full text-[10px] font-bold text-indigo-900">
+                                    <span className="material-symbols-outlined text-[12px] text-indigo-600">sync_alt</span>
+                                    <span>{conceptAccount ? conceptAccount.name : 'Sin origen'}</span>
+                                    <span className="text-indigo-400">➔</span>
+                                    <span>{destAccount ? destAccount.name : 'Sin destino'}</span>
+                                  </div>
+                                ) : conceptAccount ? (
                                   <span 
                                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white shadow-2xs"
                                     style={{ backgroundColor: conceptAccount.color }}
                                   >
                                     {conceptAccount.name}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                             </div>
                           </div>

@@ -577,9 +577,11 @@ export function BulkAccountAssignmentManager({
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                               concept.type === 'income' 
                                 ? 'bg-emerald-100 text-emerald-800' 
-                                : 'bg-rose-100 text-rose-800'
+                                : concept.type === 'transfer'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-rose-100 text-rose-800'
                             }`}>
-                              {concept.type === 'income' ? 'Ingreso' : 'Gasto'}
+                              {concept.type === 'income' ? 'Ingreso' : concept.type === 'transfer' ? 'Traspaso' : 'Gasto'}
                             </span>
                             <span className="text-xs text-slate-600 font-medium">
                               {concept.category}

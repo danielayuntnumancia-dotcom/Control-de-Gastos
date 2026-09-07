@@ -239,32 +239,48 @@ export function CalendarMonthView({ payments, concepts, month, year, onPrevMonth
                   {cellPayments.slice(0, 3).map(p => {
                     const concept = concepts.find(c => c.id === p.conceptId);
                     const isApprox = concept?.dateType === 'approximate';
+                    const isTransfer = (p.type || concept?.type) === 'transfer';
                     
                     let bgClass = "bg-slate-100 text-slate-700";
                     if (p.type === 'income') bgClass = "bg-emerald-100 text-emerald-800";
-                    if (p.status === 'PAID') bgClass = p.type === 'income' ? "bg-green-200 text-green-900 border border-green-300" : "bg-green-100 text-green-800";
+                    else if (isTransfer) bgClass = "bg-purple-100 text-purple-800";
+
+                    if (p.status === 'PAID') {
+                      bgClass = p.type === 'income' 
+                        ? "bg-green-200 text-green-900 border border-green-300" 
+                        : isTransfer 
+                          ? "bg-purple-200 text-purple-900 border border-purple-300" 
+                          : "bg-green-100 text-green-800";
+                    }
                     if (p.status === 'OVERDUE') bgClass = "bg-red-100 text-red-800";
                     if (p.status === 'APPROX_OVERDUE') bgClass = "bg-orange-100 text-orange-800";
                     if (p.isDelayed) bgClass = "bg-blue-100 text-blue-800";
                     if (isApprox && p.status === 'PENDING_DATE') bgClass = "bg-orange-50 text-orange-700 border border-orange-200 border-dashed";
 
                     const paymentAcc = accounts.find(a => a.id === (p.accountId || concept?.accountId));
+                    const destAcc = isTransfer ? accounts.find(a => a.id === (p.destinationAccountId || concept?.destinationAccountId)) : null;
 
                     return (
                       <button 
                         key={p.id}
                         onClick={() => onOpenPayment(p)}
                         className={`text-left px-1.5 py-1 rounded text-[10px] sm:text-xs truncate transition-colors hover:brightness-95 ${bgClass} relative`}
-                        title={`${p.concept} - ${formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}${paymentAcc ? ` (${paymentAcc.name})` : ''}`}
+                        title={`${p.concept} - ${formatAmount(getPaymentDisplayAmount(p), p.type || 'expense', isApprox)}${isTransfer ? ` (${paymentAcc?.name || 'Sin origen'} ➔ ${destAcc?.name || 'Sin destino'})` : paymentAcc ? ` (${paymentAcc.name})` : ''}`}
                       >
                         <div className="flex items-center gap-1">
-                          {paymentAcc && (
+                          {isTransfer ? (
+                            <span className="inline-flex items-center gap-0.5 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: paymentAcc?.color || '#a855f7' }} title={`Origen: ${paymentAcc?.name || 'Sin origen'}`} />
+                              <span className="text-[8px] text-purple-600 font-bold">➔</span>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: destAcc?.color || '#a855f7' }} title={`Destino: ${destAcc?.name || 'Sin destino'}`} />
+                            </span>
+                          ) : paymentAcc ? (
                             <span 
                               className="w-1.5 h-1.5 rounded-full shrink-0 shadow-2xs" 
                               style={{ backgroundColor: paymentAcc.color }} 
                               title={paymentAcc.name}
                             />
-                          )}
+                          ) : null}
                           <span className="font-semibold block truncate">
                             {isApprox && <span className="font-normal opacity-80 mr-1">Aprox.</span>}
                             {p.concept}

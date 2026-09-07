@@ -130,9 +130,27 @@ export function ConceptDetailsView({ concept, payments, user, settings, onBack, 
               {concept.active ? 'Activo' : 'Inactivo'}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-sm text-slate-500">{concept.category}</span>
-            {(() => {
+            {concept.type === 'transfer' ? (
+              <>
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                  Traspaso / Ahorro
+                </span>
+                {(() => {
+                  const originAcc = accounts.find(a => a.id === concept.accountId);
+                  const destAcc = accounts.find(a => a.id === concept.destinationAccountId);
+                  return (
+                    <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full text-xs font-semibold text-indigo-900">
+                      <span className="material-symbols-outlined text-[14px] text-indigo-600">sync_alt</span>
+                      <span>{originAcc ? originAcc.name : 'Sin origen'}</span>
+                      <span className="text-indigo-400 font-bold">➔</span>
+                      <span>{destAcc ? destAcc.name : 'Sin destino'}</span>
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (() => {
               const acc = accounts.find(a => a.id === concept.accountId);
               if (!acc) return null;
               return (
@@ -208,22 +226,59 @@ export function ConceptDetailsView({ concept, payments, user, settings, onBack, 
               <span className="text-sm text-slate-500">Tipo de fecha</span>
               <span className="text-sm font-semibold text-slate-800">{dateTypeLabel[concept.dateType]}</span>
             </div>
-            <div className="flex justify-between items-center py-2 border-b border-slate-100">
-              <span className="text-sm text-slate-500">Cuenta Bancaria</span>
-              {(() => {
-                const acc = accounts.find(a => a.id === concept.accountId);
-                if (!acc) return <span className="text-sm text-slate-400">Sin cuenta asignada</span>;
-                return (
-                  <span 
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
-                    style={{ backgroundColor: acc.color }}
-                  >
-                    <span className="material-symbols-outlined text-[12px]">account_balance</span>
-                    {acc.name}
-                  </span>
-                );
-              })()}
-            </div>
+            {concept.type === 'transfer' ? (
+              <>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-sm text-slate-500">Cuenta de Origen (Salida)</span>
+                  {(() => {
+                    const acc = accounts.find(a => a.id === concept.accountId);
+                    if (!acc) return <span className="text-sm text-slate-400">Sin cuenta asignada</span>;
+                    return (
+                      <span 
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
+                        style={{ backgroundColor: acc.color }}
+                      >
+                        <span className="material-symbols-outlined text-[12px]">account_balance</span>
+                        {acc.name}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-sm text-slate-500">Cuenta de Destino (Entrada)</span>
+                  {(() => {
+                    const acc = accounts.find(a => a.id === concept.destinationAccountId);
+                    if (!acc) return <span className="text-sm text-slate-400">Sin cuenta asignada</span>;
+                    return (
+                      <span 
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
+                        style={{ backgroundColor: acc.color }}
+                      >
+                        <span className="material-symbols-outlined text-[12px]">account_balance</span>
+                        {acc.name}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                <span className="text-sm text-slate-500">Cuenta Bancaria</span>
+                {(() => {
+                  const acc = accounts.find(a => a.id === concept.accountId);
+                  if (!acc) return <span className="text-sm text-slate-400">Sin cuenta asignada</span>;
+                  return (
+                    <span 
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-2xs"
+                      style={{ backgroundColor: acc.color }}
+                    >
+                      <span className="material-symbols-outlined text-[12px]">account_balance</span>
+                      {acc.name}
+                    </span>
+                  );
+                })()}
+              </div>
+            )}
             {concept.dateType !== 'month_only' && concept.day && (
               <div className="flex justify-between items-center py-2 border-b border-slate-100">
                 <span className="text-sm text-slate-500">Día</span>

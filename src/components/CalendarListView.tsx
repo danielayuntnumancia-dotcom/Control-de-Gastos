@@ -68,7 +68,9 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
 
   const renderPaymentRow = (p: Payment) => {
     const concept = concepts.find(c => c.id === p.conceptId);
+    const isTransfer = (p.type || concept?.type) === 'transfer';
     const paymentAccount = accounts.find(a => a.id === (p.accountId || concept?.accountId));
+    const destAccount = isTransfer ? accounts.find(a => a.id === (p.destinationAccountId || concept?.destinationAccountId)) : null;
     let statusClass = "text-slate-600 bg-slate-100";
     let statusText: string = p.status;
     
@@ -86,9 +88,16 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
       >
         <div className="flex flex-col">
           <span className="font-semibold text-slate-800">{p.concept}</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span className="text-xs text-slate-500">{concept?.category || 'Sin categoría'}</span>
-            {paymentAccount && (
+            {isTransfer ? (
+              <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.2 rounded-full text-[10px] font-bold text-indigo-900">
+                <span className="material-symbols-outlined text-[10px] text-indigo-600">sync_alt</span>
+                <span>{paymentAccount ? paymentAccount.name : 'Sin origen'}</span>
+                <span className="text-indigo-400 font-bold">➔</span>
+                <span>{destAccount ? destAccount.name : 'Sin destino'}</span>
+              </div>
+            ) : paymentAccount ? (
               <span 
                 className="inline-flex items-center gap-0.5 px-2 py-0.2 rounded-full text-[10px] font-semibold text-white shadow-2xs"
                 style={{ backgroundColor: paymentAccount.color }}
@@ -96,7 +105,7 @@ export function CalendarListView({ payments, concepts, month, year, onPrevMonth,
                 <span className="material-symbols-outlined text-[10px]">account_balance</span>
                 {paymentAccount.name}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">

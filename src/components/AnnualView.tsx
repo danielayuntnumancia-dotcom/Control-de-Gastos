@@ -41,6 +41,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
   const [sortDesc, setSortDesc] = useState(false);
   const [isIncomeCollapsed, setIsIncomeCollapsed] = useState(false);
   const [isExpenseCollapsed, setIsExpenseCollapsed] = useState(false);
+  const [isTransferCollapsed, setIsTransferCollapsed] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   const toggleCategoryCollapse = (catName: string) => {
@@ -88,13 +89,14 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
 
     const rows = conceptsInYear.map(c => {
       const conceptPayments = thisYearPayments.filter(p => p.conceptId === c.id);
-      const isIncome = c.type === 'income' || (!c.type && (['Salario', 'Paga Extra', 'Ingreso Extra'].includes(c.category) || conceptPayments.some(p => p.type === 'income')));
+      const isTransfer = c.type === 'transfer' || conceptPayments.some(p => p.type === 'transfer');
+      const isIncome = !isTransfer && (c.type === 'income' || (!c.type && (['Salario', 'Paga Extra', 'Ingreso Extra'].includes(c.category) || conceptPayments.some(p => p.type === 'income'))));
 
       const prevTotals = calculateTotalPrevisto(conceptPayments);
       const realTotals = calculateTotalPagadoReal(conceptPayments);
 
-      const totalPrevisto = isIncome ? prevTotals.incomes : prevTotals.expenses;
-      const totalReal = isIncome ? realTotals.incomes : realTotals.expenses;
+      const totalPrevisto = isIncome ? prevTotals.incomes : isTransfer ? prevTotals.transfers : prevTotals.expenses;
+      const totalReal = isIncome ? realTotals.incomes : isTransfer ? realTotals.transfers : realTotals.expenses;
 
       const months: Record<number, { previsto: number; real: number; payments: Payment[] }> = {};
 
@@ -103,8 +105,8 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
         const mPrev = calculateTotalPrevisto(p);
         const mReal = calculateTotalPagadoReal(p);
         months[i] = {
-          previsto: isIncome ? mPrev.incomes : mPrev.expenses,
-          real: isIncome ? mReal.incomes : mReal.expenses,
+          previsto: isIncome ? mPrev.incomes : isTransfer ? mPrev.transfers : mPrev.expenses,
+          real: isIncome ? mReal.incomes : isTransfer ? mReal.transfers : mReal.expenses,
           payments: p
         };
       }
@@ -112,6 +114,7 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
       return {
         concept: c,
         isIncome,
+        isTransfer,
         totalPrevisto,
         totalReal,
         months
@@ -136,9 +139,10 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
     });
 
     const incomeRows = filteredRows.filter(r => r.isIncome);
-    const expenseRows = filteredRows.filter(r => !r.isIncome);
+    const transferRows = filteredRows.filter(r => r.isTransfer);
+    const expenseRows = filteredRows.filter(r => !r.isIncome && !r.isTransfer);
 
-    return { incomeRows, expenseRows, allRows: filteredRows };
+    return { incomeRows, expenseRows, transferRows, allRows: filteredRows };
   }, [thisYearPayments, concepts, searchQuery, sortBy, sortDesc]);
 
   const expenseCategories = useMemo(() => {
@@ -463,6 +467,69 @@ export function AnnualView({ payments, concepts, globalYear, setGlobalYear, onOp
                             return (
                               <td key={i} className="p-3 text-right cursor-pointer hover:bg-emerald-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
                                 <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-emerald-700'}`}>
+                                  {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
+                                </div>
+                                {cell.real > 0 && cell.real !== cell.previsto && (
+                                  <div className="text-[10px] text-slate-500 line-through">
+                                    {cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                  </div>
+                                )}
+                                {cell.payments.length > 1 && (
+                                  <div className="text-[10px] text-indigo-600 font-medium">+{cell.payments.length - 1} más</div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </>
+                  )}
+
+                  {/* SECCIÓN TRASPASOS / AHORRO */}
+                  {matrixData.transferRows.length > 0 && (
+                    <>
+                      <tr 
+                        onClick={() => setIsTransferCollapsed(!isTransferCollapsed)}
+                        className="bg-purple-50/80 hover:bg-purple-100/80 border-y border-purple-200 cursor-pointer select-none transition-colors group"
+                      >
+                        <td colSpan={14} className="p-2.5 text-xs font-bold text-purple-900 uppercase tracking-wider sticky left-0 bg-purple-50/80 group-hover:bg-purple-100/80 z-10 shadow-[1px_0_0_0_#e9d5ff]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-sm text-purple-600">sync_alt</span>
+                              <span>Traspasos / Ahorro ({matrixData.transferRows.length})</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-purple-700">
+                              <span>{isTransferCollapsed ? 'Mostrar' : 'Plegar'}</span>
+                              <span className={`material-symbols-outlined text-base transition-transform ${isTransferCollapsed ? '' : 'rotate-180'}`}>
+                                expand_more
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {!isTransferCollapsed && matrixData.transferRows.map((row) => (
+                        <tr key={row.concept.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="p-3 text-sm font-semibold text-slate-800 sticky left-0 bg-white group-hover:bg-slate-50 shadow-[1px_0_0_0_#e2e8f0] truncate max-w-[200px]" title={row.concept.name}>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0" />
+                              <span className="truncate">{row.concept.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="text-sm font-bold text-purple-700">{row.totalReal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                            {row.totalReal !== row.totalPrevisto && (
+                              <div className="text-[10px] text-slate-500 line-through">{row.totalPrevisto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</div>
+                            )}
+                          </td>
+                          {Array.from({ length: 12 }).map((_, i) => {
+                            const cell = row.months[i];
+                            if (cell.payments.length === 0) return <td key={i} className="p-3 text-center text-slate-300">-</td>;
+                            
+                            const hasPending = cell.payments.some((p: Payment) => p.status !== 'PAID' && p.status !== 'CANCELED');
+                            
+                            return (
+                              <td key={i} className="p-3 text-right cursor-pointer hover:bg-purple-50 transition-colors" onClick={() => onOpenPayment(cell.payments[0])}>
+                                <div className={`text-sm font-bold ${hasPending ? 'text-orange-600' : 'text-purple-700'}`}>
                                   {cell.real > 0 ? cell.real.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : (hasPending ? cell.previsto.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }) : '0,00 €')}
                                 </div>
                                 {cell.real > 0 && cell.real !== cell.previsto && (

@@ -105,6 +105,13 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
     return accounts.find(a => a.id === accountId) || null;
   };
 
+  const getPaymentDestinationAccount = (p: Payment) => {
+    const concept = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
+    const destinationAccountId = p.destinationAccountId || concept?.destinationAccountId;
+    if (!destinationAccountId) return null;
+    return accounts.find(a => a.id === destinationAccountId) || null;
+  };
+
   // Group upcoming pending payments by account
   const upcomingByAccount = useMemo(() => {
     const counts: Record<string, { pendingAmount: number; count: number; account: (typeof accounts)[0] | null }> = {
@@ -137,9 +144,9 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
     return filteredUpcoming.reduce((sum, p) => sum + (getPaymentDisplayAmount(p) || 0), 0) / 100;
   }, [filteredUpcoming]);
 
-  // Monthly summary by account for current month expenses
+  // Monthly summary by account for current month expenses and outgoing transfers
   const accountExpensesSummary = useMemo(() => {
-    const expensePayments = currentMonthPayments.filter(p => (p.type || 'expense') === 'expense' && p.status !== 'CANCELED');
+    const expensePayments = currentMonthPayments.filter(p => ((p.type || 'expense') === 'expense' || p.type === 'transfer') && p.status !== 'CANCELED');
 
     const summaryMap: Record<string, {
       account: (typeof accounts)[0] | null;
@@ -484,14 +491,23 @@ export function DashboardView({ payments, concepts, settings, onOpenPayment, onN
               filteredUpcoming.map(p => {
                 const concept = p.conceptId ? conceptsMap.get(p.conceptId) : undefined;
                 const isNoDay = concept?.dateType === 'month_only' || p.status === 'PENDING_DATE';
+                const isTransfer = (p.type || concept?.type) === 'transfer';
                 const paymentAccount = getPaymentAccount(p);
+                const destAccount = isTransfer ? getPaymentDestinationAccount(p) : null;
                 
                 return (
                   <div key={p.id} className="p-4 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition-colors" onClick={() => onOpenPayment(p)}>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-medium text-slate-900">{p.concept}</h3>
-                        {paymentAccount ? (
+                        {isTransfer ? (
+                          <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full text-[10px] font-bold text-indigo-900">
+                            <span className="material-symbols-outlined text-[11px] text-indigo-600">sync_alt</span>
+                            <span>{paymentAccount ? paymentAccount.name : 'Sin origen'}</span>
+                            <span className="text-indigo-400 font-bold">➔</span>
+                            <span>{destAccount ? destAccount.name : 'Sin destino'}</span>
+                          </div>
+                        ) : paymentAccount ? (
                           <span 
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white shadow-2xs"
                             style={{ backgroundColor: paymentAccount.color }}

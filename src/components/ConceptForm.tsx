@@ -55,6 +55,10 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     }
     return '';
   });
+  const [destinationAccountId, setDestinationAccountId] = useState<string>(() => {
+    if (initialConcept?.destinationAccountId) return initialConcept.destinationAccountId;
+    return '';
+  });
   const [description, setDescription] = useState(initialConcept?.description || '');
   const [amountStr, setAmountStr] = useState(initialConcept ? (initialConcept.expectedAmount / 100).toString() : '');
   const [amountType, setAmountType] = useState<Concept['amountType']>(initialConcept?.amountType || 'exact');
@@ -65,6 +69,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
   const [applyAccountChangesFromYear, setApplyAccountChangesFromYear] = useState<number>(new Date().getFullYear());
   
   const hasAccountChanged = initialConcept && initialConcept.accountId !== accountId;
+  const hasDestinationAccountChanged = initialConcept && (initialConcept.destinationAccountId || '') !== destinationAccountId;
 
   // Update color automatically when category changes
   useEffect(() => {
@@ -74,7 +79,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
 
   useEffect(() => {
     if (!initialConcept) {
-      setCategory(type === 'income' ? 'Salario' : 'Suscripción');
+      setCategory(type === 'income' ? 'Salario' : type === 'transfer' ? 'Ahorro' : 'Suscripción');
     }
   }, [type, initialConcept]);
 
@@ -173,8 +178,9 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     return (
       type !== (initialConcept?.type || 'expense') ||
       name !== (initialConcept?.name || '') ||
-      category !== (initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : 'Suscripción')) ||
+      category !== (initialConcept?.category || (initialConcept?.type === 'income' ? 'Salario' : initialConcept?.type === 'transfer' ? 'Ahorro' : 'Suscripción')) ||
       accountId !== (initialConcept?.accountId || '') ||
+      destinationAccountId !== (initialConcept?.destinationAccountId || '') ||
       description !== (initialConcept?.description || '') ||
       amountStr !== (initialConcept ? (initialConcept.expectedAmount / 100).toString() : '') ||
       amountType !== (initialConcept?.amountType || 'exact') ||
@@ -188,7 +194,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
       active !== (initialConcept ? initialConcept.active : true) ||
       exceptionNoticeDays !== (initialConcept?.exceptionNoticeDays ?? '')
     );
-  }, [type, name, category, accountId, description, amountStr, amountType, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
+  }, [type, name, category, accountId, destinationAccountId, description, amountStr, amountType, color, periodicity, dateType, day, firstPeriodMonth, firstPeriodYear, customMonths, active, exceptionNoticeDays, initialConcept]);
 
   useUnsavedChangesWarning(isDirty && !isSubmitting);
 
@@ -215,6 +221,20 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
     if (amountStr.trim() === '') {
       alert("El importe es obligatorio");
       return;
+    }
+    if (type === 'transfer') {
+      if (!accountId) {
+        alert("Debes seleccionar la cuenta de origen (de donde sale el dinero).");
+        return;
+      }
+      if (!destinationAccountId) {
+        alert("Debes seleccionar la cuenta de destino (donde entra el dinero).");
+        return;
+      }
+      if (accountId === destinationAccountId) {
+        alert("La cuenta de origen y la de destino no pueden ser la misma.");
+        return;
+      }
     }
     setStep(2);
   };
@@ -295,6 +315,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         type: type || 'expense',
         category,
         accountId: accountId || undefined,
+        destinationAccountId: type === 'transfer' ? (destinationAccountId || undefined) : undefined,
         description,
         expectedAmount: amountCents,
         amountType: amountType,
@@ -362,6 +383,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               userId: user.uid,
               conceptId: conceptRef.id,
               accountId: conceptData.accountId || null,
+              destinationAccountId: conceptData.destinationAccountId || null,
               concept: conceptData.name,
               type: conceptData.type,
               expectedAmount: amountCents,
@@ -398,6 +420,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               batch.update(d.ref, { 
                 concept: conceptData.name,
                 accountId: conceptData.accountId || null,
+                destinationAccountId: conceptData.destinationAccountId || null,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate',
@@ -408,6 +431,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               batch.update(d.ref, {
                 concept: conceptData.name,
                 accountId: conceptData.accountId || null,
+                destinationAccountId: conceptData.destinationAccountId || null,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate'
@@ -423,46 +447,49 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
               const { status } = computeDueDateAndStatus(year, month, params);
               
               const paymentDateForComparison = new Date(year, month, 1);
-              const targetDate = hasAccountChanged 
+              const targetDate = (hasAccountChanged || hasDestinationAccountChanged)
                 ? new Date(applyAccountChangesFromYear, applyAccountChangesFromMonth, 1)
                 : now;
               
               const newAccountId = (hasAccountChanged && paymentDateForComparison >= targetDate) || (!hasAccountChanged && dueDate >= now)
                 ? (conceptData.accountId || null)
-                : data.accountId;
+                : (data.accountId || null);
+
+              const newDestAccountId = (hasDestinationAccountChanged && paymentDateForComparison >= targetDate) || (!hasDestinationAccountChanged && dueDate >= now)
+                ? (conceptData.destinationAccountId || null)
+                : (data.destinationAccountId || null);
 
               batch.update(d.ref, {
                 concept: conceptData.name,
                 accountId: newAccountId,
+                destinationAccountId: newDestAccountId,
                 type: conceptData.type,
                 expectedAmount: amountCents,
                 isAmountApproximate: conceptData.amountType === 'approximate',
                 status: status
               });
-            } else if (dueDate >= now || hasAccountChanged) {
-              const year = data.originalPeriodYear !== undefined ? data.originalPeriodYear : dueDate.getFullYear();
-              const month = data.originalPeriodMonth !== undefined ? data.originalPeriodMonth : dueDate.getMonth();
-              const paymentDateForComparison = new Date(year, month, 1);
-              const targetDate = hasAccountChanged 
+            } else if (dueDate >= now) {
+              const paymentDateForComparison = new Date(dueDate.getFullYear(), dueDate.getMonth(), 1);
+              const targetDate = (hasAccountChanged || hasDestinationAccountChanged)
                 ? new Date(applyAccountChangesFromYear, applyAccountChangesFromMonth, 1)
                 : now;
+              
+              const newAccountId = (hasAccountChanged && paymentDateForComparison >= targetDate) || (!hasAccountChanged && dueDate >= now)
+                ? (conceptData.accountId || null)
+                : (data.accountId || null);
 
-              const shouldUpdateGeneral = dueDate >= now;
-              const shouldUpdateAccount = hasAccountChanged && paymentDateForComparison >= targetDate;
+              const newDestAccountId = (hasDestinationAccountChanged && paymentDateForComparison >= targetDate) || (!hasDestinationAccountChanged && dueDate >= now)
+                ? (conceptData.destinationAccountId || null)
+                : (data.destinationAccountId || null);
 
-              if (shouldUpdateGeneral || shouldUpdateAccount) {
-                const updates: any = {};
-                if (shouldUpdateGeneral) {
-                  updates.concept = conceptData.name;
-                  updates.type = conceptData.type;
-                  updates.expectedAmount = amountCents;
-                  updates.isAmountApproximate = conceptData.amountType === 'approximate';
-                }
-                if (shouldUpdateAccount) {
-                  updates.accountId = conceptData.accountId || null;
-                }
-                batch.update(d.ref, updates);
-              }
+              batch.update(d.ref, {
+                concept: conceptData.name,
+                accountId: newAccountId,
+                destinationAccountId: newDestAccountId,
+                type: conceptData.type,
+                expectedAmount: amountCents,
+                isAmountApproximate: conceptData.amountType === 'approximate'
+              });
             }
           }
         });
@@ -494,20 +521,31 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
         <div className="p-6 overflow-y-auto flex-1">
           {step === 1 ? (
             <form id="step1" onSubmit={handleNext} className="space-y-5">
-              <div className="flex bg-slate-100 p-1 rounded-lg mb-6 w-full">
+              <div className="flex bg-slate-100 p-1 rounded-lg mb-6 w-full gap-1">
                 <button
                   type="button"
                   onClick={() => setType('expense')}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${type === 'expense' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors ${type === 'expense' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Gasto
                 </button>
                 <button
                   type="button"
                   onClick={() => setType('income')}
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${type === 'income' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors ${type === 'income' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Ingreso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setType('transfer');
+                    setCategory('Ahorro');
+                  }}
+                  className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors flex items-center justify-center gap-1 ${type === 'transfer' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">sync_alt</span>
+                  Traspaso / Ahorro
                 </button>
               </div>
 
@@ -558,7 +596,7 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                           <option value={category}>{category}</option>
                         )}
                       </>
-                    ) : (
+                    ) : type === 'income' ? (
                       <>
                         <option value="Salario">Salario</option>
                         <option value="Paga Extra">Paga Extra</option>
@@ -571,6 +609,14 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                         {!['Salario', 'Paga Extra', 'Ingreso Extra', 'Ahorro', 'Otro'].includes(category) && !customCategories.some(c => c.name === category) && category && (
                           <option value={category}>{category}</option>
                         )}
+                      </>
+                    ) : (
+                      <>
+                        <option value="Ahorro">Ahorro</option>
+                        <option value="Inversión">Inversión</option>
+                        {customCategories.filter(c => c.type === 'both').map(c => (
+                          <option key={c.id} value={c.name}>{c.name}</option>
+                        ))}
                       </>
                     )}
                   </select>
@@ -589,66 +635,115 @@ export function ConceptForm({ user, onClose, initialConcept }: ConceptFormProps)
                 </div>
               </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-slate-700">Cuenta Bancaria (Cobro / Ingreso)</label>
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setNewAccName('');
-                      setNewAccColor('#2563eb');
-                      setNewAccIsDefault(accounts.length === 0);
-                      setShowNewAccModal(true);
-                    }}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
-                  >
-                    <span className="material-symbols-outlined text-xs">add</span>
-                    Nueva cuenta
-                  </button>
-                </div>
-                <div className="relative">
-                  <select
-                    value={accountId}
-                    onChange={e => setAccountId(e.target.value)}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
-                  >
-                    <option value="">Sin cuenta asignada</option>
-                    {accounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {hasAccountChanged && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg animate-fade-in-up">
-                    <p className="text-xs text-blue-800 font-medium mb-2">
-                      Has cambiado la cuenta bancaria. ¿Desde qué mes quieres aplicar este cambio a los pagos pendientes?
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
+              {type === 'transfer' ? (
+                <div className="space-y-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                  <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 mb-1">
+                    <span className="material-symbols-outlined text-indigo-600 text-[18px]">swap_horiz</span>
+                    <span>Cuentas del Traspaso</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Cuenta Origen (Sale el dinero) *
+                      </label>
                       <select
-                        value={applyAccountChangesFromMonth}
-                        onChange={(e) => setApplyAccountChangesFromMonth(Number(e.target.value))}
-                        className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                        value={accountId}
+                        onChange={e => setAccountId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
+                        required
                       >
-                        {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
-                          <option key={i} value={i}>{m}</option>
+                        <option value="">-- Selecciona cuenta de origen --</option>
+                        {accounts.map(acc => (
+                          <option key={acc.id} value={acc.id} disabled={acc.id === destinationAccountId}>
+                            {acc.name}
+                          </option>
                         ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Cuenta Destino (Entra el dinero) *
+                      </label>
                       <select
-                        value={applyAccountChangesFromYear}
-                        onChange={(e) => setApplyAccountChangesFromYear(Number(e.target.value))}
-                        className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                        value={destinationAccountId}
+                        onChange={e => setDestinationAccountId(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
+                        required
                       >
-                        {Array.from({ length: 5 }).map((_, i) => {
-                          const y = new Date().getFullYear() - 2 + i;
-                          return <option key={y} value={y}>{y}</option>;
-                        })}
+                        <option value="">-- Selecciona cuenta de destino --</option>
+                        {accounts.map(acc => (
+                          <option key={acc.id} value={acc.id} disabled={acc.id === accountId}>
+                            {acc.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-slate-700">Cuenta Bancaria (Cobro / Ingreso)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setNewAccName('');
+                        setNewAccColor('#2563eb');
+                        setNewAccIsDefault(accounts.length === 0);
+                        setShowNewAccModal(true);
+                      }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                    >
+                      <span className="material-symbols-outlined text-xs">add</span>
+                      Nueva cuenta
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={accountId}
+                      onChange={e => setAccountId(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 bg-white text-sm"
+                    >
+                      <option value="">Sin cuenta asignada</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {(hasAccountChanged || hasDestinationAccountChanged) && (
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg animate-fade-in-up">
+                  <p className="text-xs text-blue-800 font-medium mb-2">
+                    Has cambiado las cuentas asociadas. ¿Desde qué mes quieres aplicar este cambio a los pagos pendientes?
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select
+                      value={applyAccountChangesFromMonth}
+                      onChange={(e) => setApplyAccountChangesFromMonth(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                    >
+                      {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
+                        <option key={i} value={i}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={applyAccountChangesFromYear}
+                      onChange={(e) => setApplyAccountChangesFromYear(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white border border-blue-200 rounded text-sm text-slate-700 focus:outline-none focus:border-blue-400"
+                    >
+                      {Array.from({ length: 5 }).map((_, i) => {
+                        const y = new Date().getFullYear() - 2 + i;
+                        return <option key={y} value={y}>{y}</option>;
+                      })}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Descripción (Opcional)</label>

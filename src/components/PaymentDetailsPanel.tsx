@@ -31,6 +31,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
   });
   const [delayedMark, setDelayedMark] = useState(false);
   const [accountId, setAccountId] = useState<string>(payment.accountId || concept?.accountId || '');
+  const [destinationAccountId, setDestinationAccountId] = useState<string>(payment.destinationAccountId || concept?.destinationAccountId || '');
   const [description, setDescription] = useState(payment.description || '');
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       setEffectiveDate(`${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`);
       setDelayedMark(payment.isDelayed === true);
       setAccountId(payment.accountId || concept?.accountId || '');
+      setDestinationAccountId(payment.destinationAccountId || concept?.destinationAccountId || '');
       setDescription(payment.description || '');
     }
   }, [payment, concept, actionState]);
@@ -126,6 +128,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       actualDate: updatedDate,
       dueDate: updatedDate,
       accountId: accountId || null,
+      destinationAccountId: (payment.type || concept?.type) === 'transfer' ? (destinationAccountId || null) : null,
       description: description.trim()
     }, actionState);
   };
@@ -147,6 +150,7 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
       isDelayed: delayedMark,
       dueDate: newDueDate,
       accountId: accountId || null,
+      destinationAccountId: (payment.type || concept?.type) === 'transfer' ? (destinationAccountId || null) : null,
       description: description.trim()
     }, actionState);
   };
@@ -201,8 +205,11 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
     }, actionState);
   };
 
+  const isTransfer = (payment.type || concept?.type) === 'transfer';
   const effectiveAccountId = payment.accountId || concept?.accountId;
   const assignedAccount = accounts.find(a => a.id === effectiveAccountId);
+  const effectiveDestAccountId = payment.destinationAccountId || concept?.destinationAccountId;
+  const assignedDestAccount = accounts.find(a => a.id === effectiveDestAccountId);
 
   return (
     <>
@@ -228,7 +235,14 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
               <p className="text-sm font-medium text-indigo-600 bg-indigo-50 inline-block px-2 py-0.5 rounded">
                 {concept?.category || 'Sin categoría'}
               </p>
-              {assignedAccount ? (
+              {isTransfer ? (
+                <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full text-xs font-semibold text-indigo-900">
+                  <span className="material-symbols-outlined text-[13px] text-indigo-600">sync_alt</span>
+                  <span>{assignedAccount ? assignedAccount.name : 'Sin origen'}</span>
+                  <span className="text-indigo-400 font-bold">➔</span>
+                  <span>{assignedDestAccount ? assignedDestAccount.name : 'Sin destino'}</span>
+                </div>
+              ) : assignedAccount ? (
                 <span 
                   className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white shadow-xs"
                   style={{ backgroundColor: assignedAccount.color }}
@@ -383,21 +397,56 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria (Cobro / Pago)</label>
-                <select
-                  value={accountId}
-                  onChange={e => setAccountId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="">Sin cuenta asignada</option>
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isTransfer ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta de Origen (Salida)</label>
+                    <select
+                      value={accountId}
+                      onChange={e => setAccountId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Sin cuenta asignada</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta de Destino (Entrada)</label>
+                    <select
+                      value={destinationAccountId}
+                      onChange={e => setDestinationAccountId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Sin cuenta asignada</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria (Cobro / Pago)</label>
+                  <select
+                    value={accountId}
+                    onChange={e => setAccountId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Sin cuenta asignada</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Observaciones (Opcional)</label>
@@ -462,21 +511,56 @@ export function PaymentDetailsPanel({ payment, concept, onClose }: PaymentDetail
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria</label>
-                <select
-                  value={accountId}
-                  onChange={e => setAccountId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="">Sin cuenta asignada</option>
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isTransfer ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta de Origen (Salida)</label>
+                    <select
+                      value={accountId}
+                      onChange={e => setAccountId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Sin cuenta asignada</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta de Destino (Entrada)</label>
+                    <select
+                      value={destinationAccountId}
+                      onChange={e => setDestinationAccountId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Sin cuenta asignada</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cuenta Bancaria</label>
+                  <select
+                    value={accountId}
+                    onChange={e => setAccountId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Sin cuenta asignada</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} {acc.isDefault ? '(Predeterminada)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               
               {delayedMark && (
                 <div className="flex items-start gap-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
